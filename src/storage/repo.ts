@@ -3,10 +3,12 @@ import { defaultSettings, type DiaryEntry, type LibraryEntry, type LibraryStatus
 
 export async function getSettings(): Promise<Settings> {
   const s = await db.settings.get('settings');
-  if (s) return { ...defaultSettings(), ...s, sliders: { ...defaultSettings().sliders, ...s.sliders }, dials: { ...defaultSettings().dials, ...s.dials } };
-  const fresh = defaultSettings();
-  await db.settings.put(fresh);
-  return fresh;
+  const d = defaultSettings();
+  if (s) return { ...d, ...s, sliders: { ...d.sliders, ...s.sliders }, dials: { ...d.dials, ...s.dials } };
+  // Read-only: never create the row here. A put inside a liveQuery read
+  // transaction throws ReadOnlyError and crashes the app on fresh installs.
+  // saveSettings persists the row on the first real change.
+  return d;
 }
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
   const cur = await getSettings();
