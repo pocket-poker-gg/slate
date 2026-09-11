@@ -46,9 +46,6 @@ export default function Stats() {
     })();
   }, [diary, library, titles]);
 
-  if (!library || library.length === 0) return <div className="page"><Empty title="No stats yet" body="Watch and rate some titles first." /></div>;
-
-  const ratedCount = (library ?? []).filter((e) => e.rating !== undefined).length;
 
   // Pareto frontier over the currently selected format: max predicted enjoyment
   // for any time investment <= x.
@@ -62,6 +59,11 @@ export default function Stats() {
       return { ...p, front };
     });
   }, [frontier, frontierType]);
+
+  if (!library || library.length === 0) return <div className="page"><Empty title="No stats yet" body="Watch and rate some titles first." /></div>;
+
+  const ratedCount = (library ?? []).filter((e) => e.rating !== undefined).length;
+
   const completedSeries = (library ?? []).filter((e) => e.status === 'watched' && e.key.startsWith('tv:')).length;
   const dropped = (library ?? []).filter((e) => e.status === 'dropped').length;
 

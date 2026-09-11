@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../../storage/db';
 import { useLibrary, useSettings, useTitlesMap, useOnline } from '../hooks';
@@ -20,14 +20,15 @@ export default function Home() {
   const nav = useNavigate();
   const online = useOnline();
   const all = useLibrary();
-  const watching = all?.filter((e) => e.status === 'watching');
-  const watchlist = all?.filter((e) => e.status === 'watchlist');
+  // Memoized: fresh arrays every render would retrigger the effects below forever.
+  const watching = useMemo(() => all?.filter((e) => e.status === 'watching'), [all]);
+  const watchlist = useMemo(() => all?.filter((e) => e.status === 'watchlist'), [all]);
   const [tonight, setTonight] = useState<Recommendation | null>(recsCache[0] ?? null);
   const [recs, setRecs] = useState<Recommendation[]>(recsCache);
   const [progressRows, setProgressRows] = useState<{ meta: TitleMeta; next: { season: number; episode: number }; pct: number }[]>([]);
   const toast = useToast();
 
-  const keys = all?.map((e) => e.key);
+  const keys = useMemo(() => all?.map((e) => e.key), [all]);
   const titles = useTitlesMap(keys);
 
   useEffect(() => {
