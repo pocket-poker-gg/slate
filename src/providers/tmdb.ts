@@ -264,6 +264,28 @@ export async function getSeason(tmdbId: number, season: number): Promise<SeasonD
   };
 }
 
+// TMDB user reviews - the lawful review-text lane (served by TMDB's public
+// API; we never scrape review text from IMDb/RT/Google).
+export interface TmdbReview {
+  id: string;
+  author: string;
+  rating?: number; // author score 0..10 when given
+  content: string;
+  createdAt?: string;
+  url?: string;
+}
+export async function getReviews(mediaType: MediaType, tmdbId: number, max = 6): Promise<TmdbReview[]> {
+  const d = await cachedJson<any>(`/${mediaType}/${tmdbId}/reviews`, { language: 'en-US', page: 1 }, TTL.season);
+  return (d.results ?? []).slice(0, max).map((r: any): TmdbReview => ({
+    id: String(r.id ?? ''),
+    author: r.author_details?.name || r.author_details?.username || r.author || 'TMDB user',
+    rating: typeof r.author_details?.rating === 'number' ? r.author_details.rating : undefined,
+    content: String(r.content ?? '').trim(),
+    createdAt: r.created_at,
+    url: r.url
+  })).filter((r: TmdbReview) => r.content.length > 0);
+}
+
 export interface WatchProviderOption { id: number; name: string; logoPath: string | null }
 export async function listWatchProviders(region = 'US'): Promise<WatchProviderOption[]> {
   const d = await cachedJson<any>('/watch/providers/movie', { watch_region: region }, TTL.providers);

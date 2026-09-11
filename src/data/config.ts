@@ -4,6 +4,12 @@
 // TMDB's API is designed for direct client access.
 export const TMDB_API_KEY = '05f9ba4aac6d4a5b2084144087dea224';
 export const TMDB_API_BASE = 'https://api.themoviedb.org/3';
+// OMDb (omdbapi.com) free-tier key, shipped client-side by the same design as
+// the TMDB key: read-only access to public ratings, requests carry only an
+// IMDb title id. Content licensed CC BY-NC 4.0 (non-commercial), which fits
+// this personal app. Replace with your own key via the same override pattern.
+export const OMDB_API_KEY = '960c2ae7';
+export const OMDB_API_BASE = 'https://www.omdbapi.com/';
 export const TMDB_IMG = 'https://image.tmdb.org/t/p';
 export const APP_VERSION = '1.0.0';
 export const APP_NAME = 'Slate';

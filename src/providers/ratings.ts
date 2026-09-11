@@ -1,21 +1,27 @@
 import type { ExternalRating, TitleMeta } from '../data/types';
+import { lookupImdbRating } from './imdbDataset';
+import { getOmdbRatings, type OmdbRatings } from './omdb';
 
 export interface RatingProvider {
   id: string;
   name: string;
   kind: 'critic' | 'audience' | 'aggregate';
-  getRating(title: TitleMeta): Promise<ExternalRating | null>;
+  getRating(title: TitleMeta, ctx?: RatingsContext): Promise<ExternalRating | null>;
 }
+
+// Shared per-title context so each external source is fetched at most once
+// per render even when several providers read from it.
+export interface RatingsContext { omdb?: OmdbRatings | null }
 
 // TMDB rating is available automatically via the public API (already fetched with title details).
 export const tmdbRatingProvider: RatingProvider = {
   id: 'tmdb',
   name: 'TMDB',
-  kind: 'aggregate',
+  kind: 'audience',
   async getRating(title) {
     if (title.voteAverage && title.voteCount && title.voteCount > 0) {
       return {
-        source: 'tmdb', label: 'TMDB', kind: 'aggregate',
+        source: 'tmdb', label: 'TMDB', kind: 'audience',
         value: Math.round(title.voteAverage * 10),
         rawLabel: `${title.voteAverage.toFixed(1)}/10`,
         voteCount: title.voteCount,
@@ -30,23 +36,75 @@ export const tmdbRatingProvider: RatingProvider = {
 const unavailable = (source: string, label: string, kind: 'critic' | 'audience' | 'aggregate', url: string | undefined, reason: string): ExternalRating =>
   ({ source, label, kind, url, available: false, unavailableReason: reason });
 
-// IMDb, Rotten Tomatoes and Letterboxd do not offer free lawful automatic rating APIs
-// for client-side apps. We never scrape them. We surface an honest "unavailable"
-// state plus an external link, and any user-imported values appear separately.
+// IMDb: official non-commercial dataset (build-time sharded bundle), with the
+// OMDb API as a live fallback mirror of the same score. Never scraped.
 export const imdbProvider: RatingProvider = {
-  id: 'imdb', name: 'IMDb', kind: 'aggregate',
-  async getRating(title) {
+  id: 'imdb', name: 'IMDb', kind: 'audience',
+  async getRating(title, ctx) {
     const url = title.imdbId ? `https://www.imdb.com/title/${title.imdbId}/` : undefined;
-    return unavailable('imdb', 'IMDb', 'aggregate', url, 'Unavailable automatically');
+    const hit = await lookupImdbRating(title.imdbId);
+    if (hit) {
+      return {
+        source: 'imdb', label: 'IMDb', kind: 'audience',
+        value: Math.round(hit.rating * 10),
+        rawLabel: `${hit.rating.toFixed(1)}/10`,
+        voteCount: hit.votes, url, available: true
+      };
+    }
+    const omdb = ctx?.omdb;
+    if (omdb?.imdbRating) {
+      return {
+        source: 'imdb', label: 'IMDb', kind: 'audience',
+        value: Math.round(omdb.imdbRating * 10),
+        rawLabel: `${omdb.imdbRating.toFixed(1)}/10`,
+        voteCount: omdb.imdbVotes, url, available: true
+      };
+    }
+    return unavailable('imdb', 'IMDb', 'audience', url, 'Below the bundled-dataset vote threshold');
   }
 };
+
+// Rotten Tomatoes: the Tomatometer via OMDb. Honest labeling: it is the
+// percentage of professional critics who rated the title positively, not an
+// average rating.
 export const rtProvider: RatingProvider = {
-  id: 'rottentomatoes', name: 'Rotten Tomatoes', kind: 'critic',
-  async getRating(title) {
+  id: 'rottentomatoes', name: 'RT Tomatometer', kind: 'critic',
+  async getRating(title, ctx) {
     const q = encodeURIComponent(title.title);
-    return unavailable('rottentomatoes', 'Rotten Tomatoes', 'critic', `https://www.rottentomatoes.com/search?search=${q}`, 'Unavailable automatically');
+    const url = `https://www.rottentomatoes.com/search?search=${q}`;
+    const t = ctx?.omdb?.tomatometer;
+    if (t !== undefined) {
+      return { source: 'rottentomatoes', label: 'RT Tomatometer', kind: 'critic', value: t, rawLabel: `${t}%`, url, available: true };
+    }
+    return unavailable('rottentomatoes', 'RT', 'critic', url, 'Unavailable automatically');
   }
 };
+
+// Metacritic: the Metascore via OMDb (weighted critic aggregate, 0..100).
+export const metacriticProvider: RatingProvider = {
+  id: 'metacritic', name: 'Metacritic', kind: 'critic',
+  async getRating(title, ctx) {
+    const q = encodeURIComponent(title.title);
+    const url = `https://www.metacritic.com/search/${q}/`;
+    const m = ctx?.omdb?.metascore;
+    if (m !== undefined) {
+      return { source: 'metacritic', label: 'Metacritic', kind: 'critic', value: m, rawLabel: `${m}/100`, url, available: true };
+    }
+    return unavailable('metacritic', 'Metacritic', 'critic', url, 'Unavailable automatically');
+  }
+};
+
+// Google shows ratings in its own results but offers no lawful free source for
+// them; we never scrape. Honest unavailable state plus an outbound link.
+export const googleProvider: RatingProvider = {
+  id: 'google', name: 'Google', kind: 'aggregate',
+  async getRating(title) {
+    const q = encodeURIComponent(`${title.title} ${title.year ?? ''}`.trim());
+    return unavailable('google', 'Google', 'aggregate', `https://www.google.com/search?q=${q}`, 'No lawful automatic source');
+  }
+};
+
+// Letterboxd has no free lawful automatic API; user-imported values appear separately.
 export const letterboxdProvider: RatingProvider = {
   id: 'letterboxd', name: 'Letterboxd', kind: 'audience',
   async getRating(title) {
@@ -55,9 +113,10 @@ export const letterboxdProvider: RatingProvider = {
   }
 };
 
-export const ratingProviders: RatingProvider[] = [tmdbRatingProvider, imdbProvider, rtProvider, letterboxdProvider];
+export const ratingProviders: RatingProvider[] = [tmdbRatingProvider, imdbProvider, rtProvider, metacriticProvider, googleProvider, letterboxdProvider];
 
 export async function getExternalRatings(title: TitleMeta, imported?: Partial<Record<string, { value: number; rawLabel: string; at: number }>>): Promise<ExternalRating[]> {
+  const ctx: RatingsContext = { omdb: await getOmdbRatings(title.imdbId) };
   const out: ExternalRating[] = [];
   for (const p of ratingProviders) {
     const imp = imported?.[p.id];
@@ -66,7 +125,7 @@ export async function getExternalRatings(title: TitleMeta, imported?: Partial<Re
       continue;
     }
     try {
-      const r = await p.getRating(title);
+      const r = await p.getRating(title, ctx);
       if (r) out.push(r);
     } catch { /* provider failure must not break the app */ }
   }

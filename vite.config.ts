@@ -31,6 +31,17 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         runtimeCaching: [
           {
+            // IMDb dataset shards (same origin, small JSON): cache-first so
+            // viewed rating data works offline; rebuilt at each deploy.
+            urlPattern: /\/imdb-ratings\/.*\.json$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'imdb-ratings',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,
             handler: 'CacheFirst',
             options: {

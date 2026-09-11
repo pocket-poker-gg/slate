@@ -2,6 +2,8 @@
 
 Slate builds to static files (`npm run build` -> `dist/`). Any static host works; the app is deployed on Cloudflare's free tier, which cannot bill because the account has no payment method attached.
 
+Before building, regenerate the IMDb rating shards with `npm run build:data` (downloads IMDb's official daily dataset, ~9 MB, and emits the sharded lookup files into `public/imdb-ratings/`). `npm run deploy` runs both steps plus `wrangler deploy`. Skipping `build:data` simply deploys without IMDb scores - the app degrades to its honest unavailable state.
+
 ## Cloudflare (current)
 Static assets served from the free tier. SPA fallback routes all paths to `index.html`.
 

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useTitleMeta, useEntry, useSettings, useOnline } from '../hooks';
 import { setStatus, setRating, toggleFavorite, updateEntry, getEntry, addDiary, recordFeedback, getProgress, progressStats, nextEpisode } from '../../storage/repo';
 import { getExternalRatings, computeConsensus } from '../../providers/ratings';
+import { getReviews, type TmdbReview } from '../../providers/tmdb';
 import type { ExternalRating } from '../../data/types';
 import { buildContext } from '../../recommendation/recommend';
 import { predictRating, finishLikelihood, formatCommitment } from '../../recommendation/predict';
@@ -25,6 +26,7 @@ export default function TitleDetail() {
   const online = useOnline();
   const toast = useToast();
   const [ratings, setRatings] = useState<ExternalRating[]>([]);
+  const [reviews, setReviews] = useState<TmdbReview[]>([]);
   const [rateOpen, setRateOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -36,6 +38,7 @@ export default function TitleDetail() {
   useEffect(() => {
     if (!meta || meta.detailLevel !== 'full') return;
     getExternalRatings(meta).then(setRatings);
+    getReviews(mt, numId).then(setReviews).catch(() => { /* offline or none */ });
     (async () => {
       try {
         const ctx = await buildContext();
@@ -169,6 +172,17 @@ export default function TitleDetail() {
         </section>
       )}
 
+      {/* community reviews (TMDB user reviews - the lawful review-text lane) */}
+      {reviews.length > 0 && (
+        <section className="section" style={{ padding: '0 16px' }}>
+          <div className="title-2">Community reviews</div>
+          <div className="mt8" style={{ display: 'grid', gap: 8 }}>
+            {reviews.map((r) => <CommunityReviewCard key={r.id} review={r} />)}
+          </div>
+          <div className="caption mt8">User reviews via TMDB - may contain spoilers</div>
+        </section>
+      )}
+
       {/* where to watch */}
       {meta.providers && (meta.providers.flatrate?.length || meta.providers.rent?.length || meta.providers.buy?.length) ? (
         <section className="section" style={{ padding: '0 16px' }}>
@@ -251,6 +265,26 @@ export default function TitleDetail() {
       </Sheet>
       <ReviewSheet open={reviewOpen} onClose={() => setReviewOpen(false)} tmdbKey={meta.key} mediaType={mt} existing={entry?.review} spoiler={entry?.reviewSpoiler} />
       <LogSheet open={logOpen} onClose={() => setLogOpen(false)} meta={meta} defaultRating={entry?.rating} onDone={() => toast('Logged to diary')} />
+    </div>
+  );
+}
+
+function CommunityReviewCard({ review }: { review: TmdbReview }) {
+  const [expanded, setExpanded] = useState(false);
+  const SNIP = 280;
+  const long = review.content.length > SNIP;
+  const text = expanded || !long ? review.content : `${review.content.slice(0, SNIP).trimEnd()}...`;
+  return (
+    <div className="card card-pad">
+      <div className="spread">
+        <span className="subhead" style={{ fontWeight: 600 }}>{review.author}</span>
+        {review.rating !== undefined && <span className="footnote num">{review.rating}/10</span>}
+      </div>
+      <p className="body mt8" style={{ color: 'var(--text-2)', whiteSpace: 'pre-wrap', margin: 0 }}>{text}</p>
+      <div className="row mt8" style={{ gap: 12 }}>
+        {long && <button className="btn btn-ghost btn-sm" onClick={() => setExpanded((e) => !e)}>{expanded ? 'Show less' : 'Read more'}</button>}
+        {review.url && <a className="btn btn-ghost btn-sm" href={review.url} target="_blank" rel="noopener noreferrer">Full review on TMDB</a>}
+      </div>
     </div>
   );
 }

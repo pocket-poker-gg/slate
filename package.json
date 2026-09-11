@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:data": "node scripts/build-imdb-ratings.mjs",
+    "deploy": "npm run build:data && npm run build && wrangler deploy"
   },
   "keywords": [],
   "author": "",
