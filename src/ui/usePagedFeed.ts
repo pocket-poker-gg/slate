@@ -58,6 +58,17 @@ export function usePagedFeed(opts: PagedFeedOptions): PagedFeedControls {
   const prepareRef = useRef(preparePage);
   prepareRef.current = preparePage;
 
+  // Chase check: after any append, if the sentinel is still within the
+  // prefetch margin (short pages, instant jumps), pull the next page
+  // immediately. IntersectionObserver alone only fires on crossings and
+  // stalls when the sentinel never leaves the margin.
+  const chaseSentinel = useCallback(() => {
+    const el = sentinelElRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.top < window.innerHeight + 1400 && r.bottom > -1400) requestMoreRef.current();
+  }, []);
+
   const loadPage = useCallback(async (next: number): Promise<void> => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -87,9 +98,11 @@ export function usePagedFeed(opts: PagedFeedOptions): PagedFeedControls {
       if (aliveRef.current) {
         setLoading(false);
         setLoadingMore(false);
+        // Let the append lay out, then chase if the sentinel is still near.
+        requestAnimationFrame(() => requestAnimationFrame(() => { if (aliveRef.current) chaseSentinel(); }));
       }
     }
-  }, [maxPage]);
+  }, [maxPage, chaseSentinel]);
   const loadPageRef = useRef(loadPage);
   loadPageRef.current = loadPage;
 
