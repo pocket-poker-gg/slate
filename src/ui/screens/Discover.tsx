@@ -53,6 +53,7 @@ export default function Discover() {
   const [onlyMyProviders, setOnlyMyProviders] = useState(false);
   const [sortMode, setSortMode] = useState<DiscoverSort>('match');
   const [ctx, setCtx] = useState<EngineContext | null>(null);
+  const [ctxReady, setCtxReady] = useState(false);
   const [dialsOpen, setDialsOpen] = useState(false);
 
   const dials = settings?.dials;
@@ -61,7 +62,7 @@ export default function Discover() {
   // context (taste model + library) once per settings change
   useEffect(() => {
     let alive = true;
-    loadGenreMaps().then(() => buildContext()).then((c) => { if (alive) setCtx(c); }).catch(() => { if (alive) setCtx(null); });
+    loadGenreMaps().then(() => buildContext()).then((c) => { if (!alive) return; setCtx(c); setCtxReady(true); }).catch(() => { if (!alive) return; setCtx(null); setCtxReady(true); });
     return () => { alive = false; };
   }, [settings]);
 
@@ -102,7 +103,7 @@ export default function Discover() {
     `discover:${JSON.stringify([mediaType, genres, minRating, maxRuntime, decade, status, language, miniseries, onlyMyProviders, settings?.watchProviders, dials, sortMode])}`,
   [mediaType, genres, minRating, maxRuntime, decade, status, language, miniseries, onlyMyProviders, settings?.watchProviders, dials, sortMode]);
 
-  const feed = usePagedFeed({ cacheKey, ready: !!dials, fetchPage, preparePage });
+  const feed = usePagedFeed({ cacheKey, ready: ctxReady && !!dials, fetchPage, preparePage });
 
   const genreList = mediaType === 'movie' ? GENRES_MOVIE : GENRES_TV;
   const hubs = hubsFor(mediaType);

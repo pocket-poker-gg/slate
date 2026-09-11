@@ -26,11 +26,12 @@ export default function Category() {
   const settings = useSettings();
   const online = useOnline();
   const [ctx, setCtx] = useState<EngineContext | null>(null);
+  const [ctxReady, setCtxReady] = useState(false);
   const salt = todaySalt();
 
   useEffect(() => {
     let alive = true;
-    loadGenreMaps().then(() => buildContext()).then((c) => { if (alive) setCtx(c); }).catch(() => { if (alive) setCtx(null); });
+    loadGenreMaps().then(() => buildContext()).then((c) => { if (!alive) return; setCtx(c); setCtxReady(true); }).catch(() => { if (!alive) return; setCtx(null); setCtxReady(true); });
     return () => { alive = false; };
   }, [settings]);
 
@@ -65,7 +66,7 @@ export default function Category() {
   }, [salt]);
 
   const cacheKey = `category:${mediaType}:${hub?.id ?? ''}:${sub?.id ?? ''}`;
-  const feed = usePagedFeed({ cacheKey, ready: !!hub, fetchPage, preparePage });
+  const feed = usePagedFeed({ cacheKey, ready: !!hub && ctxReady, fetchPage, preparePage });
 
   if (!hub) {
     return (
