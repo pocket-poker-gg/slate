@@ -107,6 +107,12 @@ export default function Home() {
       )}
 
       {/* Tonight */}
+      {!tonight && !recsLoaded && (
+        <section className="section" style={{ padding: '0 16px' }}>
+          <div className="section-head" style={{ padding: 0 }}><span className="title-2">Tonight</span></div>
+          <div className="skeleton" style={{ aspectRatio: '16/10', borderRadius: 'var(--radius-xl)' }} />
+        </section>
+      )}
       {tonight && (
         <section className="section" style={{ padding: '0 16px' }}>
           <div className="section-head" style={{ padding: 0 }}><span className="title-2">Tonight</span><Link to="/tonight">More picks</Link></div>
