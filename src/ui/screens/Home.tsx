@@ -1,0 +1,191 @@
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { db } from '../../storage/db';
+import { useLibrary, useSettings, useTitlesMap, useOnline } from '../hooks';
+import { generateRecommendations, type Recommendation } from '../../recommendation/recommend';
+import { nextEpisode, progressStats } from '../../storage/repo';
+import { backdropUrl } from '../../data/config';
+import { formatCommitment } from '../../recommendation/predict';
+import { PosterLink, SkeletonShelf, Empty, useToast } from '../components';
+import { IconSearch, IconBolt } from '../icons';
+import type { TitleMeta } from '../../data/types';
+
+export default function Home() {
+  const settings = useSettings();
+  const nav = useNavigate();
+  const online = useOnline();
+  const watching = useLibrary('watching');
+  const watchlist = useLibrary('watchlist');
+  const all = useLibrary();
+  const [tonight, setTonight] = useState<Recommendation | null>(null);
+  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [progressRows, setProgressRows] = useState<{ meta: TitleMeta; next: { season: number; episode: number }; pct: number }[]>([]);
+  const toast = useToast();
+
+  const keys = all?.map((e) => e.key);
+  const titles = useTitlesMap(keys);
+
+  useEffect(() => {
+    if (settings && !settings.onboarded) nav('/onboarding', { replace: true });
+  }, [settings, nav]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const list = await generateRecommendations({ limit: 8 });
+        if (!alive) return;
+        setRecs(list);
+        setTonight(list[0] ?? null);
+      } catch { if (alive) setRecs([]); }
+    })();
+    return () => { alive = false; };
+  }, [online]);
+
+  // continue watching rows
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!watching || !titles) return;
+      const rows: typeof progressRows = [];
+      for (const e of watching) {
+        if (!e.key.startsWith('tv:')) continue;
+        const meta = titles.get(e.key);
+        if (!meta || meta.detailLevel !== 'full') continue;
+        const p = await db.progress.get(e.key);
+        if (!p) continue;
+        const next = nextEpisode(p, meta.seasons);
+        if (!next) continue;
+        rows.push({ meta, next, pct: progressStats(p, meta.numberOfEpisodes, meta.episodeRuntimes[0] ?? 45).pct });
+      }
+      if (alive) setProgressRows(rows);
+    })();
+    return () => { alive = false; };
+  }, [watching, titles]);
+
+  const shortlist = (watchlist ?? []).filter((e) => e.watchSoon || e.priority > 0).slice(0, 10);
+  const finishThis = progressRows.filter((r) => r.pct >= 0.6);
+  const recent = (all ?? []).filter((e) => e.status === 'watchlist').slice(0, 10);
+  const hiddenGem = recs.find((r) => r.scored.components.novelty > 0.65);
+  const becauseKey = tonight?.scored.meta.key;
+  const because = recs.filter((r) => r.scored.meta.key !== becauseKey).slice(0, 10);
+
+  const metaOf = (key: string) => titles?.get(key);
+  const linkOf = (key: string) => { const [m, id] = key.split(':'); return `/title/${m}/${id}`; };
+
+  return (
+    <div className="page" style={{ paddingLeft: 0, paddingRight: 0 }}>
+      <div className="topbar"><div className="topbar-row">
+        <div className="large-title">Slate</div>
+        <Link to="/search" className="iconbtn" aria-label="Search"><IconSearch /></Link>
+      </div></div>
+      {!online && <div className="offline-banner">Offline - showing your library and cached picks</div>}
+
+      {/* Continue watching */}
+      {progressRows.length > 0 && (
+        <section className="section">
+          <div className="section-head"><span className="title-2">Continue Watching</span></div>
+          <div className="shelf">
+            {progressRows.map(({ meta, next, pct }) => (
+              <Link key={meta.key} to={linkOf(meta.key)} className="shelf-item">
+                <div className="poster" style={{ aspectRatio: '16/9', width: 200 }}>
+                  {meta.backdropPath ? <img src={backdropUrl(meta.backdropPath, 'w780') ?? ''} alt={meta.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="poster-fallback">{meta.title}</div>}
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 10px 8px', background: 'linear-gradient(transparent, rgba(0,0,0,0.85))', color: '#fff', fontSize: 12, fontWeight: 600 }}>S{next.season} E{next.episode}</div>
+                  <div className="progressbar" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, borderRadius: 0 }}><div style={{ width: `${Math.round(pct * 100)}%` }} /></div>
+                </div>
+                <div className="poster-title">{meta.title}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Tonight */}
+      {tonight && (
+        <section className="section" style={{ padding: '0 16px' }}>
+          <div className="section-head" style={{ padding: 0 }}><span className="title-2">Tonight</span><Link to="/tonight">More picks</Link></div>
+          <Link to={linkOf(tonight.scored.meta.key)} className="tonight-card" style={{ display: 'block' }}>
+            {tonight.scored.meta.backdropPath && <img className="tonight-backdrop" src={backdropUrl(tonight.scored.meta.backdropPath, 'w1280') ?? ''} alt="" loading="lazy" />}
+            <div className="tonight-body">
+              <span className="match-pct">{tonight.explanation.matchPct}% Match</span>
+              <div className="title-1" style={{ color: '#fff', marginTop: 4 }}>{tonight.scored.meta.title}</div>
+              <div className="footnote" style={{ color: 'rgba(255,255,255,0.75)', marginTop: 3 }}>
+                {tonight.scored.meta.mediaType === 'movie' ? 'Movie' : 'Series'}{tonight.scored.meta.year ? ` · ${tonight.scored.meta.year}` : ''}{formatCommitment(tonight.scored.meta) ? ` · ${formatCommitment(tonight.scored.meta)}` : ''}
+              </div>
+              <div className="footnote" style={{ color: 'rgba(255,255,255,0.85)', marginTop: 6 }}>{tonight.explanation.headline}</div>
+            </div>
+          </Link>
+        </section>
+      )}
+      {tonight && (
+        <div style={{ padding: '12px 16px 0' }}>
+          <Link to="/tonight" className="btn btn-secondary btn-block"><IconBolt /> What should I watch?</Link>
+        </div>
+      )}
+
+      {/* Because you loved */}
+      {because.length > 0 && (
+        <section className="section">
+          <div className="section-head"><span className="title-2">For You</span></div>
+          <div className="shelf">
+            {because.map((r) => (
+              <PosterLink key={r.scored.meta.key} to={linkOf(r.scored.meta.key)} path={r.scored.meta.posterPath} title={r.scored.meta.title} sub={`${r.explanation.matchPct}% match`} />
+            ))}
+          </div>
+        </section>
+      )}
+      {!recs.length && <section className="section"><SkeletonShelf /></section>}
+
+      {/* Shortlist */}
+      {shortlist.length > 0 && (
+        <section className="section">
+          <div className="section-head"><span className="title-2">Your Shortlist</span><Link to="/library">Watchlist</Link></div>
+          <div className="shelf">
+            {shortlist.map((e) => { const m = metaOf(e.key); return m ? <PosterLink key={e.key} to={linkOf(e.key)} path={m.posterPath} title={m.title} sub={e.watchSoon ? 'Watch soon' : 'Priority'} /> : null; })}
+          </div>
+        </section>
+      )}
+
+      {/* Finish this */}
+      {finishThis.length > 0 && (
+        <section className="section">
+          <div className="section-head"><span className="title-2">Finish This</span></div>
+          <div className="shelf">
+            {finishThis.map(({ meta, pct }) => <PosterLink key={meta.key} to={linkOf(meta.key)} path={meta.posterPath} title={meta.title} sub={`${Math.round(pct * 100)}% watched`} />)}
+          </div>
+        </section>
+      )}
+
+      {/* Hidden gem */}
+      {hiddenGem && (
+        <section className="section">
+          <div className="section-head"><span className="title-2">Hidden Gem</span></div>
+          <Link to={linkOf(hiddenGem.scored.meta.key)} className="cell" style={{ textDecoration: 'none' }}>
+            <div className="poster" style={{ width: 84 }}>{hiddenGem.scored.meta.posterPath && <img src={backdropUrl(hiddenGem.scored.meta.posterPath, 'w780') ?? ''} alt="" style={{ objectFit: 'cover', width: '100%', height: '100%' }} />}</div>
+            <div className="cell-main">
+              <div className="cell-title">{hiddenGem.scored.meta.title}</div>
+              <div className="cell-sub">{hiddenGem.explanation.headline}</div>
+              <div className="caption mt8">{hiddenGem.explanation.matchPct}% match · less-traveled pick</div>
+            </div>
+          </Link>
+        </section>
+      )}
+
+      {/* Recently added */}
+      {recent.length > 0 && (
+        <section className="section">
+          <div className="section-head"><span className="title-2">Recently Added</span></div>
+          <div className="shelf">
+            {recent.map((e) => { const m = metaOf(e.key); return m ? <PosterLink key={e.key} to={linkOf(e.key)} path={m.posterPath} title={m.title} sub={m.year ? String(m.year) : ''} /> : null; })}
+          </div>
+        </section>
+      )}
+
+      {all && all.length === 0 && (
+        <Empty title="Start your library"
+          body="Search for a show or movie you love and rate it - Slate learns fast."
+          action={<Link to="/search" className="btn btn-primary">Find something</Link>} />
+      )}
+    </div>
+  );
+}
