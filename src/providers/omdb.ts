@@ -63,3 +63,16 @@ export async function getOmdbRatings(imdbId?: string): Promise<OmdbRatings | nul
     return parsed;
   } catch { return null; }
 }
+
+// Cache-only probe: returns the stored OMDb payload (fresh or stale) without
+// any network request. Used by poster cards, which must never trigger an
+// unbudgeted fetch just to render.
+export async function getCachedOmdbRatings(imdbId?: string): Promise<OmdbRatings | null | undefined> {
+  if (!imdbId || !/^tt\d+$/.test(imdbId) || !hasOmdbKey()) return undefined;
+  const url = `${OMDB_API_BASE}?apikey=${activeKey()}&i=${imdbId}`;
+  try {
+    const row = await db.metaCache.get(url);
+    if (row) return row.data as OmdbRatings | null;
+  } catch { /* cache unavailable */ }
+  return undefined;
+}

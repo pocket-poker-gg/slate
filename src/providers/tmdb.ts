@@ -41,7 +41,7 @@ async function cachedJson<T = any>(path: string, params: Record<string, string |
 
 export interface SearchResultItem {
   key: string; tmdbId: number; mediaType: MediaType; title: string; year?: number;
-  posterPath?: string | null; voteAverage?: number; voteCount?: number; overview?: string;
+  posterPath?: string | null; backdropPath?: string | null; voteAverage?: number; voteCount?: number; overview?: string;
   genreIds: number[]; popularity?: number;
 }
 export interface PersonResultItem { id: number; name: string; knownFor?: string; profilePath?: string | null }
@@ -72,6 +72,7 @@ function mapSummary(mediaType: MediaType, r: any): SearchResultItem {
     title: title ?? r.original_title ?? r.original_name ?? 'Untitled',
     year: date ? Number(String(date).slice(0, 4)) : undefined,
     posterPath: r.poster_path ?? null,
+    backdropPath: r.backdrop_path ?? null,
     voteAverage: r.vote_average,
     voteCount: r.vote_count,
     overview: r.overview,
@@ -133,7 +134,7 @@ export async function topRated(mediaType: MediaType, page = 1): Promise<SearchRe
 
 export interface DiscoverParams {
   mediaType: MediaType; page?: number; genres?: number[]; yearGte?: number; yearLte?: number;
-  voteGte?: number; voteCountGte?: number; runtimeLte?: number; runtimeGte?: number; language?: string; tvType?: number;
+  voteGte?: number; voteCountGte?: number; voteCountLte?: number; runtimeLte?: number; runtimeGte?: number; language?: string; tvType?: number;
   providers?: number[]; status?: string; sort?: string; keywords?: number[];
 }
 export interface Paged { items: SearchResultItem[]; page: number; totalPages: number; totalResults: number }
@@ -148,6 +149,7 @@ export async function discover(p: DiscoverParams): Promise<Paged> {
     'first_air_date.lte': p.mediaType === 'tv' && p.yearLte ? `${p.yearLte}-12-31` : undefined,
     'vote_average.gte': p.voteGte,
     'vote_count.gte': p.voteCountGte ?? (p.voteGte ? 100 : undefined),
+    'vote_count.lte': p.voteCountLte,
     'with_runtime.lte': p.runtimeLte,
     'with_runtime.gte': p.runtimeGte,
     'with_original_language': p.language,
@@ -286,6 +288,13 @@ export async function getReviews(mediaType: MediaType, tmdbId: number, max = 6):
     createdAt: r.created_at,
     url: r.url
   })).filter((r: TmdbReview) => r.content.length > 0);
+}
+
+// External ids for a title (IMDb id etc.). Cheap endpoint, effectively static
+// data, cached 30 days; poster cards resolve IMDb/RT scores through this.
+export async function getExternalIds(mediaType: MediaType, tmdbId: number): Promise<{ imdbId?: string }> {
+  const d = await cachedJson<any>(`/${mediaType}/${tmdbId}/external_ids`, {}, 30 * DAY);
+  return { imdbId: d.imdb_id ?? undefined };
 }
 
 export interface WatchProviderOption { id: number; name: string; logoPath: string | null }

@@ -15,6 +15,7 @@ import type { TitleMeta } from '../../data/types';
 let recsCache: Recommendation[] = [];
 let recsCacheDay = '';
 let recsLoaded = false;
+let trendingCache: import('../../providers/tmdb').SearchResultItem[] = [];
 const dayKey = () => new Date().toISOString().slice(0, 10);
 
 export default function Home() {
@@ -28,7 +29,7 @@ export default function Home() {
   const freshCache = recsCacheDay === dayKey();
   const [tonight, setTonight] = useState<Recommendation | null>(freshCache ? recsCache[0] ?? null : null);
   const [recs, setRecs] = useState<Recommendation[]>(freshCache ? recsCache : []);
-  const [trendingItems, setTrendingItems] = useState<import('../../providers/tmdb').SearchResultItem[]>([]);
+  const [trendingItems, setTrendingItems] = useState<import('../../providers/tmdb').SearchResultItem[]>(trendingCache);
   const [progressRows, setProgressRows] = useState<{ meta: TitleMeta; next: { season: number; episode: number } | null; airDate?: string; pct: number }[]>([]);
   const toast = useToast();
 
@@ -52,6 +53,7 @@ export default function Home() {
       try {
         const { trending } = await import('../../providers/tmdb');
         const t = await trending('all');
+        trendingCache = t;
         if (alive) setTrendingItems(t);
       } catch { /* offline */ }
     })();
@@ -154,7 +156,7 @@ export default function Home() {
           <div className="section-head"><span className="title-2">For You</span></div>
           <div className="shelf">
             {because.map((r) => (
-              <PosterLink key={r.scored.meta.key} to={linkOf(r.scored.meta.key)} path={r.scored.meta.posterPath} title={r.scored.meta.title} sub={`${r.explanation.matchPct}% match`} />
+              <PosterLink key={r.scored.meta.key} to={linkOf(r.scored.meta.key)} path={r.scored.meta.posterPath} title={r.scored.meta.title} sub={`${r.explanation.matchPct}% match`} mediaType={r.scored.meta.mediaType} tmdbId={r.scored.meta.tmdbId} />
             ))}
           </div>
         </section>
@@ -167,7 +169,7 @@ export default function Home() {
           <div className="section-head"><span className="title-2">Trending This Week</span><Link to="/discover">Discover</Link></div>
           <div className="shelf">
             {trendingShelf.map((i) => (
-              <PosterLink key={i.key} to={linkOf(i.key)} path={i.posterPath} title={i.title} sub={i.year ? String(i.year) : 'Now'} />
+              <PosterLink key={i.key} to={linkOf(i.key)} path={i.posterPath} title={i.title} sub={i.year ? String(i.year) : 'Now'} mediaType={i.mediaType} tmdbId={i.tmdbId} />
             ))}
           </div>
         </section>
@@ -178,7 +180,7 @@ export default function Home() {
         <section className="section">
           <div className="section-head"><span className="title-2">Your Shortlist</span><Link to="/library">Watchlist</Link></div>
           <div className="shelf">
-            {shortlist.map((e) => { const m = metaOf(e.key); return m ? <PosterLink key={e.key} to={linkOf(e.key)} path={m.posterPath} title={m.title} sub={e.watchSoon ? 'Watch soon' : 'Priority'} /> : null; })}
+            {shortlist.map((e) => { const m = metaOf(e.key); return m ? <PosterLink key={e.key} to={linkOf(e.key)} path={m.posterPath} title={m.title} sub={e.watchSoon ? 'Watch soon' : 'Priority'} mediaType={m.mediaType} tmdbId={m.tmdbId} /> : null; })}
           </div>
         </section>
       )}
@@ -188,7 +190,7 @@ export default function Home() {
         <section className="section">
           <div className="section-head"><span className="title-2">Finish This</span></div>
           <div className="shelf">
-            {finishThis.map(({ meta, pct }) => <PosterLink key={meta.key} to={linkOf(meta.key)} path={meta.posterPath} title={meta.title} sub={`${Math.round(pct * 100)}% watched`} />)}
+            {finishThis.map(({ meta, pct }) => <PosterLink key={meta.key} to={linkOf(meta.key)} path={meta.posterPath} title={meta.title} sub={`${Math.round(pct * 100)}% watched`} mediaType={meta.mediaType} tmdbId={meta.tmdbId} />)}
           </div>
         </section>
       )}
@@ -213,7 +215,7 @@ export default function Home() {
         <section className="section">
           <div className="section-head"><span className="title-2">Recently Added</span></div>
           <div className="shelf">
-            {recent.map((e) => { const m = metaOf(e.key); return m ? <PosterLink key={e.key} to={linkOf(e.key)} path={m.posterPath} title={m.title} sub={m.year ? String(m.year) : ''} /> : null; })}
+            {recent.map((e) => { const m = metaOf(e.key); return m ? <PosterLink key={e.key} to={linkOf(e.key)} path={m.posterPath} title={m.title} sub={m.year ? String(m.year) : ''} mediaType={m.mediaType} tmdbId={m.tmdbId} /> : null; })}
           </div>
         </section>
       )}

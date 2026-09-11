@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { posterUrl, logoUrl } from '../data/config';
+import { resolveCardRating, requestRtForCard, cachedRtForCard } from '../providers/cardRatings';
+import type { MediaType } from '../data/types';
 import type { WatchProviderInfo } from '../data/types';
 import { IconChevronL, IconStar, IconX } from './icons';
 
@@ -19,13 +21,60 @@ export function Poster({ path, title, className = '', size = 'w342' as const, ea
   );
 }
 
-export function PosterLink({ to, path, title, sub, size }: { to: string; path?: string | null; title: string; sub?: string; size?: 'w154' | 'w185' | 'w342' }) {
+export function PosterLink({ to, path, title, sub, size, mediaType, tmdbId }: { to: string; path?: string | null; title: string; sub?: string; size?: 'w154' | 'w185' | 'w342'; mediaType?: MediaType; tmdbId?: number }) {
   return (
     <Link to={to} className="shelf-item">
       <Poster path={path} title={title} size={size ?? 'w342'} />
       <div className="poster-title">{title}</div>
       {sub && <div className="poster-sub">{sub}</div>}
+      {mediaType && tmdbId ? <CardScores mediaType={mediaType} tmdbId={tmdbId} /> : null}
     </Link>
+  );
+}
+
+// ---------- Card scores (IMDb + RT, quiet inline marks) ----------
+// Fixed-height row: scores arriving async never shift the grid. Everything
+// network-bound sits behind a visibility gate: the card must be on screen for
+// a beat before its IMDb-id resolution runs, and RT additionally respects a
+// persisted daily budget. Scroll-past costs zero requests.
+export function CardScores({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [sc, setSc] = useState<{ imdb?: number; rt?: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    let obs: IntersectionObserver | null = null;
+    let timer: number | undefined;
+    setSc(null);
+    const start = () => {
+      void resolveCardRating(mediaType, tmdbId).then((hit) => {
+        if (!alive || !hit) return;
+        setSc((s) => ({ ...(s ?? {}), imdb: hit.imdb }));
+        void cachedRtForCard(hit.imdbId).then((cached) => {
+          if (!alive) return;
+          if (cached?.tomatometer !== undefined) {
+            setSc((s) => ({ ...(s ?? {}), rt: cached.tomatometer }));
+            return;
+          }
+          void requestRtForCard(hit.imdbId).then((o) => {
+            if (alive && o?.tomatometer !== undefined) setSc((s) => ({ ...(s ?? {}), rt: o.tomatometer }));
+          });
+        });
+      });
+    };
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') { start(); return undefined; }
+    obs = new IntersectionObserver((ents) => {
+      if (!ents[0]?.isIntersecting) { window.clearTimeout(timer); return; }
+      timer = window.setTimeout(() => { obs?.disconnect(); start(); }, 350);
+    });
+    obs.observe(el);
+    return () => { alive = false; obs?.disconnect(); window.clearTimeout(timer); };
+  }, [mediaType, tmdbId]);
+  return (
+    <div ref={ref} className="card-scores num" aria-label={sc?.imdb !== undefined ? `IMDb ${sc.imdb.toFixed(1)}${sc.rt !== undefined ? `, Rotten Tomatoes ${sc.rt}%` : ''}` : undefined}>
+      {sc?.imdb !== undefined && <span className="cs-item"><span className="cs-src">IMDb</span>{sc.imdb.toFixed(1)}</span>}
+      {sc?.rt !== undefined && <span className="cs-item"><span className="cs-src">RT</span>{sc.rt}%</span>}
+    </div>
   );
 }
 

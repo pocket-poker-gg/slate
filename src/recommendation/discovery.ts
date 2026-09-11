@@ -35,7 +35,7 @@ export interface DiscoverFilters {
 }
 
 // --- Dial-driven query mapping: the dials change what TMDB returns, not just the order ---
-export function discoverQueryFor(f: DiscoverFilters, dials: DiscoveryDials, page: number): DiscoverParams {
+export function discoverQueryFor(f: DiscoverFilters, dials: DiscoveryDials, page: number, sortMode?: DiscoverSort): DiscoverParams {
   const params: DiscoverParams = {
     mediaType: f.mediaType,
     page,
@@ -52,6 +52,21 @@ export function discoverQueryFor(f: DiscoverFilters, dials: DiscoveryDials, page
   // Popular / Hidden gem: changes the source ordering and the vote floor.
   // Hidden end asks TMDB for best-rated titles with a low vote floor - the lane
   // where genuine deep cuts live instead of the all-time popular list.
+  // Sort modes with a real catalog-side lane become request changes, not just
+  // re-ranking: gems ask TMDB for high-rated, low-vote titles directly so the
+  // lane paginates deeply instead of filtering a popular page down to scraps.
+  if (sortMode === 'gems') {
+    params.sort = 'vote_average.desc';
+    params.voteCountGte = GEM_MIN_VOTES;
+    params.voteCountLte = GEM_MAX_VOTES;
+    params.voteGte = params.voteGte ?? GEM_MIN_RATING;
+    return params;
+  }
+  if (sortMode === 'quality') {
+    params.sort = 'vote_average.desc';
+    params.voteCountGte = Math.max(params.voteCountGte ?? 0, 1000);
+    return params;
+  }
   if (dials.popularHidden < 0.34) {
     params.sort = 'popularity.desc';
     params.voteCountGte = Math.max(params.voteCountGte ?? 0, 500);

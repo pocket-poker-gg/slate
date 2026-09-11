@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useSettings } from './ui/hooks';
@@ -20,6 +20,7 @@ const Stats = lazy(() => import('./ui/screens/Stats'));
 const YearInReview = lazy(() => import('./ui/screens/YearInReview'));
 const Profile = lazy(() => import('./ui/screens/Profile'));
 const Calibrate = lazy(() => import('./ui/screens/Calibrate'));
+const Category = lazy(() => import('./ui/screens/Category'));
 
 // Warm the route chunks after first paint so taps never wait on the network.
 const warmRoutes = () => {
@@ -35,6 +36,7 @@ const warmRoutes = () => {
   void import('./ui/screens/Triage');
   void import('./ui/screens/ListDetail');
   void import('./ui/screens/YearInReview');
+  void import('./ui/screens/Category');
 };
 import { IconHome, IconCompass, IconLibrary, IconDiary, IconProfile } from './ui/icons';
 import { loadGenreMaps } from './providers/tmdb';
@@ -42,7 +44,7 @@ import { loadGenreMaps } from './providers/tmdb';
 function BottomNav() {
   const loc = useLocation();
   if (loc.pathname.startsWith('/onboarding')) return null;
-  if (loc.pathname.startsWith('/title/') || loc.pathname === '/triage' || loc.pathname === '/calibrate') return null;
+  if (loc.pathname.startsWith('/title/') || loc.pathname.startsWith('/browse/') || loc.pathname === '/triage' || loc.pathname === '/calibrate') return null;
   const item = (to: string, label: string, icon: React.ReactNode) => (
     <NavLink to={to} className={({ isActive }) => (isActive ? 'active' : '')} end={to === '/'} aria-label={label}>{icon}{label}</NavLink>
   );
@@ -57,9 +59,25 @@ function BottomNav() {
   );
 }
 
+// Per-path scroll memory: leaving a tab saves its position; returning
+// restores it (content renders instantly from session caches, so the restore
+// lands without a jump). New pages still start at the top.
+const scrollMemory = new Map<string, number>();
 function ScrollRestore() {
   const loc = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
+  const prevPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevPath.current === null) { prevPath.current = loc.pathname; return; }
+    if (prevPath.current === loc.pathname) return;
+    scrollMemory.set(prevPath.current, window.scrollY);
+    prevPath.current = loc.pathname;
+    const y = scrollMemory.get(loc.pathname);
+    // Two frames: let restored content lay out before jumping back.
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y ?? 0)));
+  }, [loc.pathname]);
+  useEffect(() => () => {
+    if (prevPath.current) scrollMemory.set(prevPath.current, window.scrollY);
+  }, []);
   return null;
 }
 
@@ -118,6 +136,7 @@ export default function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/tonight" element={<Tonight />} />
             <Route path="/discover" element={<Discover />} />
+            <Route path="/browse/:mediaType/:hubId" element={<Category />} />
             <Route path="/search" element={<Search />} />
             <Route path="/library" element={<Library />} />
             <Route path="/lists/:id" element={<ListDetail />} />

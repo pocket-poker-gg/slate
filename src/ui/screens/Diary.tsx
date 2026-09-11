@@ -11,12 +11,16 @@ import { useToast } from '../components';
 
 type View = 'chronological' | 'calendar' | 'monthly' | 'yearly';
 
+let diaryView: { view: View; calMonth: string | null } = { view: 'chronological', calMonth: null };
+
 export default function Diary() {
-  const [view, setView] = useState<View>('chronological');
+  const [view, setViewRaw] = useState<View>(diaryView.view);
+  const setView = (v: View) => { diaryView.view = v; setViewRaw(v); };
   const diary = useLiveQuery(() => db.diary.orderBy('date').reverse().toArray(), []);
   const titles = useTitlesMap(diary?.map((d) => d.key));
   const toast = useToast();
-  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
+  const [calMonth, setCalMonthRaw] = useState(() => diaryView.calMonth ?? (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })());
+  const setCalMonth = (v: string) => { diaryView.calMonth = v; setCalMonthRaw(v); };
 
   const byDay = useMemo(() => {
     const m = new Map<string, typeof diary>();

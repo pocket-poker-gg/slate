@@ -39,22 +39,30 @@ export function parseNaturalQuery(q: string): ParsedQuery {
   return { text: text.replace(/\s+/g, ' ').trim(), genres, maxSeasons, maxMinutes, likeText };
 }
 
+// Session persistence: leaving Search for a title and coming back must feel
+// like a native back-navigation - same query, same results, no refetch flash.
+interface SearchSession { q: string; results: SearchResults | null; tab: 'all' | 'movie' | 'tv'; trending: SearchResults['items']; likeTitle: string | null }
+let searchSession: SearchSession | null = null;
+
 export default function Search() {
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState<SearchResults | null>(null);
+  const [q, setQ] = useState(searchSession?.q ?? '');
+  const [results, setResults] = useState<SearchResults | null>(searchSession?.results ?? null);
   const [searching, setSearching] = useState(false);
-  const [trendingItems, setTrendingItems] = useState<SearchResults['items']>([]);
-  const [tab, setTab] = useState<'all' | 'movie' | 'tv'>('all');
-  const [likeTitle, setLikeTitle] = useState<string | null>(null);
+  const [trendingItems, setTrendingItems] = useState<SearchResults['items']>(searchSession?.trending ?? []);
+  const [tab, setTab] = useState<'all' | 'movie' | 'tv'>(searchSession?.tab ?? 'all');
+  const [likeTitle, setLikeTitle] = useState<string | null>(searchSession?.likeTitle ?? null);
   const online = useOnline();
   const settings = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => { if (!searchSession) inputRef.current?.focus(); }, []);
   useEffect(() => {
     trending('all').then(setTrendingItems).catch(() => {});
   }, []);
+  useEffect(() => {
+    searchSession = { q, results, tab, trending: trendingItems, likeTitle };
+  }, [q, results, tab, trendingItems, likeTitle]);
 
   useEffect(() => {
     clearTimeout(timer.current);

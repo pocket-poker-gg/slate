@@ -15,9 +15,13 @@ import { fmtDate } from '../../data/util';
 type Tab = 'watchlist' | 'watching' | 'watched' | 'favorites' | 'lists';
 type Sort = 'added' | 'match' | 'shortest' | 'oldest' | 'movies' | 'shows' | 'gems' | 'recent';
 
+let libraryView: { tab: Tab; sort: Sort } = { tab: 'watchlist', sort: 'added' };
+
 export default function Library() {
-  const [tab, setTab] = useState<Tab>('watchlist');
-  const [sort, setSort] = useState<Sort>('added');
+  const [tab, setTabRaw] = useState<Tab>(libraryView.tab);
+  const [sort, setSortRaw] = useState<Sort>(libraryView.sort);
+  const setTab = (t: Tab) => { libraryView.tab = t; setTabRaw(t); };
+  const setSort = (v: Sort) => { libraryView.sort = v; setSortRaw(v); };
   const nav = useNavigate();
   const all = useLibrary();
   const lists = useLiveQuery(() => db.lists.toArray(), []);
