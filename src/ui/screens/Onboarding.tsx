@@ -1,18 +1,85 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { popular, topRated, listWatchProviders, type SearchResultItem, type WatchProviderOption } from '../../providers/tmdb';
+import { popular, topRated, trending, listWatchProviders, searchMulti, type SearchResultItem, type WatchProviderOption } from '../../providers/tmdb';
 import { db } from '../../storage/db';
-import { updateEntry, saveSettings, getSettings } from '../../storage/repo';
-import { posterUrl, logoUrl } from '../../data/config';
+import { updateEntry, saveSettings } from '../../storage/repo';
+import { logoUrl } from '../../data/config';
 import { DEFAULT_SLIDERS, type SliderSet } from '../../data/types';
 import { LabeledSlider, Poster, Stars } from '../components';
+import { IconSearch, IconX } from '../icons';
 
 type PickedMap = Map<string, { item: SearchResultItem; rating?: number }>;
+
+const togglePick = (map: PickedMap, setMap: (m: PickedMap) => void, item: SearchResultItem) => {
+  const next = new Map(map);
+  if (next.has(item.key)) next.delete(item.key); else next.set(item.key, { item });
+  setMap(next);
+};
+
+function PosterPick({ item, map, setMap }: { item: SearchResultItem; map: PickedMap; setMap: (m: PickedMap) => void }) {
+  const on = map.has(item.key);
+  return (
+    <button onClick={() => togglePick(map, setMap, item)} style={{ textAlign: 'left', position: 'relative' }} aria-pressed={on}>
+      <Poster path={item.posterPath} title={item.title} size="w342" />
+      {on && <div style={{ position: 'absolute', inset: 0, borderRadius: 10, outline: '3px solid var(--accent)', outlineOffset: -1.5, background: 'rgba(255,255,255,0.08)' }} />}
+      <div className="poster-title" style={{ fontSize: 12, marginTop: 6 }}>{item.title}</div>
+      <div className="caption">{item.year ?? ''}</div>
+    </button>
+  );
+}
+
+// Free-text search + deep multi-source grid: find any title, not just the ones shown.
+function PickSearch({ pool, poolMore, map, setMap, exclude, placeholder }: { pool: SearchResultItem[]; poolMore: SearchResultItem[]; map: PickedMap; setMap: (m: PickedMap) => void; exclude: PickedMap; placeholder: string }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<SearchResultItem[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    if (!q.trim()) { setResults(null); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try { const r = await searchMulti(q.trim()); setResults(r.items.slice(0, 24)); }
+      catch { setResults([]); }
+      setSearching(false);
+    }, 260);
+    return () => clearTimeout(t);
+  }, [q]);
+  const gridItems = results !== null ? results : [...pool, ...poolMore].filter((i) => !exclude.has(i.key)).slice(0, 90);
+  return (
+    <div>
+      <div style={{ position: 'relative', marginTop: 14 }}>
+        <span style={{ position: 'absolute', left: 13, top: 13, color: 'var(--text-3)', width: 16, height: 16, pointerEvents: 'none' }}><IconSearch /></span>
+        <input className="input" style={{ paddingLeft: 38 }} placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search titles" autoCapitalize="off" autoCorrect="off" />
+        {q.length > 0 && <button className="iconbtn plain" aria-label="Clear search" style={{ position: 'absolute', right: 4, top: 4 }} onClick={() => setQ('')}><IconX /></button>}
+      </div>
+      {map.size > 0 && (
+        <div className="shelf" style={{ padding: '12px 0 4px' }}>
+          {[...map.values()].map(({ item }) => (
+            <div key={item.key} className="shelf-item" style={{ width: 64 }}>
+              <button onClick={() => togglePick(map, setMap, item)} aria-label={`Remove ${item.title}`} style={{ position: 'relative', display: 'block' }}>
+                <Poster path={item.posterPath} title={item.title} size="w154" />
+                <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--accent)', color: 'var(--accent-contrast)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>×</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {searching && <div className="poster-grid mt16">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" style={{ aspectRatio: '2/3', borderRadius: 10 }} />)}</div>}
+      {!searching && results !== null && results.length === 0 && <p className="footnote mt16">No matches for "{q}".</p>}
+      {!searching && (
+        <div className="poster-grid mt16">
+          {gridItems.map((i) => <PosterPick key={i.key} item={i} map={map} setMap={setMap} />)}
+        </div>
+      )}
+      {results === null && pool.length === 0 && <p className="footnote mt16">Loading titles... if you are offline, skip ahead - you can always rate titles later.</p>}
+    </div>
+  );
+}
 
 export default function Onboarding() {
   const nav = useNavigate();
   const [step, setStep] = useState(0);
   const [pool, setPool] = useState<SearchResultItem[]>([]);
+  const [poolMore, setPoolMore] = useState<SearchResultItem[]>([]);
   const [loved, setLoved] = useState<PickedMap>(new Map());
   const [disliked, setDisliked] = useState<PickedMap>(new Map());
   const [pairs, setPairs] = useState<[SearchResultItem, SearchResultItem][]>([]);
@@ -25,26 +92,31 @@ export default function Onboarding() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const [pm, pt, tm, tt] = await Promise.all([popular('movie'), popular('tv'), topRated('movie'), topRated('tv')]);
+      const merge = (lists: SearchResultItem[][]) => {
         const seen = new Set<string>();
-        const merged = [...pm, ...pt, ...tm, ...tt].filter((i) => (seen.has(i.key) ? false : (seen.add(i.key), true)));
-        setPool(merged);
-        const shuffled = [...merged].sort(() => 0.5 - Math.random());
+        return lists.flat().filter((i) => (seen.has(i.key) ? false : (seen.add(i.key), true)));
+      };
+      try {
+        // first wave: fast, recognizable titles for instant picking
+        const [pm, pt, tr] = await Promise.all([popular('movie'), popular('tv'), trending('all')]);
+        const first = merge([pm, pt, tr]);
+        setPool(first);
+        const shuffled = [...first].sort(() => 0.5 - Math.random());
         const ps: [SearchResultItem, SearchResultItem][] = [];
         for (let i = 0; i + 1 < shuffled.length && ps.length < 5; i += 2) ps.push([shuffled[i], shuffled[i + 1]]);
         setPairs(ps);
+        // second wave: depth - more pages + top rated, so the grids feel endless
+        const [pm2, pt2, tm, tt, pm3, pt3] = await Promise.all([
+          popular('movie', 2), popular('tv', 2), topRated('movie'), topRated('tv'), popular('movie', 3), popular('tv', 3)
+        ]);
+        const firstKeys = new Set(first.map((i) => i.key));
+        setPoolMore(merge([pm2, pt2, tm, tt, pm3, pt3]).filter((i) => !firstKeys.has(i.key)));
       } catch { /* offline onboarding handled below */ }
       try { setProviders((await listWatchProviders('US')).slice(0, 40)); } catch { /* offline */ }
     })();
   }, []);
 
   const steps = ['Welcome', 'Love', 'Rate', 'Dislike', 'Versus', 'Streaming', 'Taste'];
-  const toggle = (map: PickedMap, setMap: (m: PickedMap) => void, item: SearchResultItem) => {
-    const next = new Map(map);
-    if (next.has(item.key)) next.delete(item.key); else next.set(item.key, { item });
-    setMap(next);
-  };
 
   const finish = async () => {
     setSaving(true);
@@ -58,18 +130,6 @@ export default function Onboarding() {
     for (const [a, b, w] of pairAnswers) await db.pairwise.add({ aKey: a, bKey: b, winner: w, at: Date.now() });
     await saveSettings({ watchProviders: selProviders, sliders, onboarded: true });
     nav('/', { replace: true });
-  };
-
-  const PosterPick = ({ item, map, setMap }: { item: SearchResultItem; map: PickedMap; setMap: (m: PickedMap) => void }) => {
-    const on = map.has(item.key);
-    return (
-      <button onClick={() => toggle(map, setMap, item)} style={{ textAlign: 'left', position: 'relative' }}>
-        <Poster path={item.posterPath} title={item.title} size="w342" />
-        {on && <div style={{ position: 'absolute', inset: 0, borderRadius: 10, outline: '3px solid var(--accent)', outlineOffset: -1.5, background: 'rgba(255,255,255,0.08)' }} />}
-        <div className="poster-title" style={{ fontSize: 12, marginTop: 6 }}>{item.title}</div>
-        <div className="caption">{item.year ?? ''}</div>
-      </button>
-    );
   };
 
   const lovedArr = [...loved.values()];
@@ -89,10 +149,8 @@ export default function Onboarding() {
         {step === 1 && (
           <div>
             <div className="title-1">Pick the ones you love</div>
-            <p className="subhead mt8">Choose at least 5 - more makes your recommendations sharper.</p>
-            {pool.length === 0 ? <p className="footnote mt16">Loading titles... if you are offline, skip ahead - you can always rate titles later.</p> : (
-              <div className="poster-grid mt16">{pool.slice(0, 36).map((i) => <PosterPick key={i.key} item={i} map={loved} setMap={setLoved} />)}</div>
-            )}
+            <p className="subhead mt8">Choose at least 5 - more makes your recommendations sharper. Search for anything.</p>
+            <PickSearch pool={pool} poolMore={poolMore} map={loved} setMap={setLoved} exclude={disliked} placeholder="Search any movie or show" />
           </div>
         )}
         {step === 2 && (
@@ -117,7 +175,7 @@ export default function Onboarding() {
           <div>
             <div className="title-1">Anything you can't stand?</div>
             <p className="subhead mt8">Optional, but dislikes are powerful signals.</p>
-            <div className="poster-grid mt16">{pool.filter((i) => !loved.has(i.key)).slice(0, 24).map((i) => <PosterPick key={i.key} item={i} map={disliked} setMap={setDisliked} />)}</div>
+            <PickSearch pool={pool} poolMore={poolMore} map={disliked} setMap={setDisliked} exclude={loved} placeholder="Search titles you disliked" />
           </div>
         )}
         {step === 4 && (
