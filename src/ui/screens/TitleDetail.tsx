@@ -10,7 +10,7 @@ import { tasteSimilarity } from '../../recommendation/taste';
 import { matchPct, scoreCandidate } from '../../recommendation/engine';
 import { backdropUrl, logoUrl } from '../../data/config';
 import { Poster, Stars, Sheet, useToast, ProviderLogos, PosterLink, Empty, ConfirmSheet } from '../components';
-import { IconHeart, IconPlus, IconCheck, IconEye, IconTv, IconChevronR, IconShare, IconPlay } from '../icons';
+import { IconHeart, IconPlus, IconCheck, IconEye, IconTv, IconChevronR, IconChevronL, IconShare, IconPlay } from '../icons';
 import { db } from '../../storage/db';
 import type { MediaType, TitleMeta } from '../../data/types';
 import { today } from '../../data/util';
