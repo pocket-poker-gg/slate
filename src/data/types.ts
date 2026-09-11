@@ -37,6 +37,7 @@ export interface TitleMeta {
   numberOfSeasons?: number;
   numberOfEpisodes?: number;
   status?: string;
+  nextAirDate?: string; // next episode air date (tv, when announced)
   networks: string[];
   companies: string[];
   originalLanguage?: string;

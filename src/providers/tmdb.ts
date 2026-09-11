@@ -133,10 +133,11 @@ export async function topRated(mediaType: MediaType, page = 1): Promise<SearchRe
 
 export interface DiscoverParams {
   mediaType: MediaType; page?: number; genres?: number[]; yearGte?: number; yearLte?: number;
-  voteGte?: number; runtimeLte?: number; runtimeGte?: number; language?: string; tvType?: number;
+  voteGte?: number; voteCountGte?: number; runtimeLte?: number; runtimeGte?: number; language?: string; tvType?: number;
   providers?: number[]; status?: string; sort?: string; keywords?: number[];
 }
-export async function discover(p: DiscoverParams): Promise<SearchResultItem[]> {
+export interface Paged { items: SearchResultItem[]; page: number; totalPages: number; totalResults: number }
+export async function discover(p: DiscoverParams): Promise<Paged> {
   const params: Record<string, string | number | undefined> = {
     page: p.page ?? 1,
     sort_by: p.sort ?? 'popularity.desc',
@@ -146,7 +147,7 @@ export async function discover(p: DiscoverParams): Promise<SearchResultItem[]> {
     'first_air_date.gte': p.mediaType === 'tv' && p.yearGte ? `${p.yearGte}-01-01` : undefined,
     'first_air_date.lte': p.mediaType === 'tv' && p.yearLte ? `${p.yearLte}-12-31` : undefined,
     'vote_average.gte': p.voteGte,
-    'vote_count.gte': p.voteGte ? 100 : undefined,
+    'vote_count.gte': p.voteCountGte ?? (p.voteGte ? 100 : undefined),
     'with_runtime.lte': p.runtimeLte,
     'with_runtime.gte': p.runtimeGte,
     'with_original_language': p.language,
@@ -160,7 +161,7 @@ export async function discover(p: DiscoverParams): Promise<SearchResultItem[]> {
   const data = await cachedJson<any>(`/discover/${p.mediaType}`, params, TTL.list);
   const items = (data.results ?? []).map((r: any) => mapSummary(p.mediaType, r));
   await storeSummaries(items);
-  return items;
+  return { items, page: data.page ?? (p.page ?? 1), totalPages: data.total_pages ?? 1, totalResults: data.total_results ?? items.length };
 }
 
 function mapProviders(raw: any, region: string): ProviderBlock | undefined {
@@ -225,6 +226,7 @@ export async function getTitle(mediaType: MediaType, tmdbId: number, region = 'U
     numberOfSeasons: d.number_of_seasons ?? undefined,
     numberOfEpisodes: d.number_of_episodes ?? undefined,
     status: d.status ?? undefined,
+    nextAirDate: d.next_episode_to_air?.air_date ?? undefined,
     networks: (d.networks ?? []).map((n: any) => n.name),
     companies: (d.production_companies ?? []).map((c: any) => c.name).slice(0, 8),
     originalLanguage: d.original_language,

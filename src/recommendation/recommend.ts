@@ -69,7 +69,7 @@ export async function generateRecommendations(opts: {
         const genreIds = await genreIdsByName(topGenres);
         if (genreIds.length) {
           const d = await discover({ mediaType: opts.mediaType ?? 'movie', genres: genreIds, voteGte: 6.5, sort: 'vote_average.desc' });
-          d.forEach((i) => candidateKeySet.add(i.key));
+          d.items.forEach((i) => candidateKeySet.add(i.key));
         }
       }
     } catch { /* offline path below */ }
