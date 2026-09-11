@@ -46,8 +46,10 @@ export async function pickCalibrationPairs(count = 8): Promise<CalPair[]> {
     times.set(p.aKey, (times.get(p.aKey) ?? 0) + 1);
     times.set(p.bKey, (times.get(p.bKey) ?? 0) + 1);
   }
+  // Only pair titles the user can realistically judge: in their library, or
+  // well-known enough (vote count as a familiarity proxy).
   const pool = [...ctx.titles.values()]
-    .filter((t) => t.detailLevel === 'full' && t.posterPath)
+    .filter((t) => t.detailLevel === 'full' && t.posterPath && (ctx.libraryKeys.has(t.key) || (t.voteCount ?? 0) >= 300))
     .slice(0, 250)
     .map((t) => ({ t, pred: predictRating(t, ctx.model).rating }));
   return choosePairs(pool, compared, times, count);
