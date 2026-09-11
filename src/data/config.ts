@@ -2,7 +2,7 @@
 // client-side reads only; no personal data is ever sent to TMDB (see docs/PRIVACY.md).
 // The key is a free developer key and is intentionally shipped client-side, as
 // TMDB's API is designed for direct client access.
-export const TMDB_API_KEY = '__TMDB_API_KEY__';
+export const TMDB_API_KEY = '05f9ba4aac6d4a5b2084144087dea224';
 export const TMDB_API_BASE = 'https://api.themoviedb.org/3';
 export const TMDB_IMG = 'https://image.tmdb.org/t/p';
 export const APP_VERSION = '1.0.0';

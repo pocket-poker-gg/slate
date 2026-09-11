@@ -305,3 +305,6 @@ input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; wid
 .tonight-card .tonight-backdrop { width: 100%; aspect-ratio: 16/10; object-fit: cover; }
 .tonight-card .tonight-body { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 18px; background: linear-gradient(to bottom, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.82)); color: #fff; }
 .match-pct { font-size: 13px; font-weight: 700; color: var(--good); }
+
+.text-input { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2); color: var(--ink); font-size: 15px; font-family: inherit; outline: none; }
+.text-input:focus { border-color: var(--ink); }

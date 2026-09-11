@@ -4,7 +4,7 @@ import { useSettings, useOnline } from '../hooks';
 import { saveSettings, getSettings } from '../../storage/repo';
 import { createBackup, backupFilename, inspectBackup, restoreBackup, wipeAll, type BackupInspection } from '../../export/backup';
 import { parseLetterboxdCSV, matchRow, applyMatch, recordImport, type ImportPlan, type MatchResult } from '../../import/letterboxd';
-import { listWatchProviders, type WatchProviderOption } from '../../providers/tmdb';
+import { listWatchProviders, getTmdbKeyOverride, setTmdbKeyOverride, type WatchProviderOption } from '../../providers/tmdb';
 import { db } from '../../storage/db';
 import { logoUrl } from '../../data/config';
 import { Segmented, Sheet, ConfirmSheet, useToast, LabeledSlider } from '../components';
@@ -36,6 +36,8 @@ export default function Profile() {
   const [importOpen, setImportOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [keyDraft, setKeyDraft] = useState('');
   const [wipeOpen, setWipeOpen] = useState(false);
   const [restore, setRestore] = useState<BackupInspection | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -147,6 +149,7 @@ export default function Profile() {
           <Row label="Storage" sub={usage} onClick={() => { setStorageOpen(true); void estimate(); }} />
           <Row label="Privacy" onClick={() => setPrivacyOpen(true)} />
           <Row label="About sources" sub="TMDB, JustWatch availability" onClick={() => toast('Metadata and artwork: TMDB. Streaming availability: JustWatch via TMDB. IMDb, Rotten Tomatoes and Letterboxd ratings are linked, never scraped.')} />
+          <Row label="Metadata key (TMDB)" sub={getTmdbKeyOverride() ? 'Custom key active' : 'Built-in key active'} onClick={() => { setKeyDraft(getTmdbKeyOverride()); setKeyOpen(true); }} />
         </div>
         <div className="card mt16">
           <Row label="Delete personal data" danger onClick={() => setWipeOpen(true)} />
@@ -235,6 +238,18 @@ export default function Profile() {
         <button className="btn btn-secondary btn-block" onClick={async () => { await db.metaCache.clear(); if ('caches' in window) { const keys = await caches.keys(); for (const k of keys.filter((x) => x.includes('tmdb-images'))) await caches.delete(k); } toast('Image and metadata cache cleared'); }}>Clear image & metadata cache</button>
         <button className="btn btn-secondary btn-block mt8" onClick={async () => { await saveSettings({ searchHistory: [] }); toast('Search history cleared'); }}>Clear search history</button>
         <p className="caption mt16">Clearing caches never touches your library, ratings, reviews or diary.</p>
+      </Sheet>
+
+      {/* metadata key sheet */}
+      <Sheet open={keyOpen} onClose={() => setKeyOpen(false)} title="Metadata key (TMDB)">
+        <div style={{ padding: '0 20px 24px' }}>
+          <p className="caption">Slate ships with a built-in TMDB key. Paste your own free developer key here to override it. Stored only on this device.</p>
+          <input className="text-input" placeholder="TMDB API key (v3)" value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { setTmdbKeyOverride(keyDraft); setKeyOpen(false); toast(keyDraft.trim() ? 'Custom key saved' : 'Back to built-in key'); }}>Save</button>
+            {getTmdbKeyOverride() ? <button className="btn" onClick={() => { setTmdbKeyOverride(''); setKeyDraft(''); setKeyOpen(false); toast('Back to built-in key'); }}>Reset</button> : null}
+          </div>
+        </div>
       </Sheet>
 
       {/* privacy sheet */}

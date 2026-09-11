@@ -3,6 +3,10 @@ import { db } from '../storage/db';
 import { titleKey, type MediaType, type TitleMeta, type SeasonSummary, type ProviderBlock, type WatchProviderInfo } from '../data/types';
 
 const DAY = 24 * 60 * 60 * 1000;
+const OVERRIDE_KEY = 'slate.tmdbKeyOverride';
+export function getTmdbKeyOverride(): string { try { return localStorage.getItem(OVERRIDE_KEY) || ''; } catch { return ''; } }
+export function setTmdbKeyOverride(k: string) { try { const v = k.trim(); if (v) localStorage.setItem(OVERRIDE_KEY, v); else localStorage.removeItem(OVERRIDE_KEY); } catch { /* storage unavailable */ } }
+const activeKey = () => getTmdbKeyOverride() || TMDB_API_KEY;
 const TTL = { detail: 14 * DAY, search: 6 * 60 * 60 * 1000, list: 12 * 60 * 60 * 1000, providers: 3 * DAY, season: 7 * DAY };
 
 export class OfflineError extends Error { constructor() { super('offline'); this.name = 'OfflineError'; } }
@@ -12,7 +16,7 @@ export const isOnline = () => typeof navigator === 'undefined' || navigator.onLi
 
 async function cachedJson<T = any>(path: string, params: Record<string, string | number | undefined>, ttl: number): Promise<T> {
   const usp = new URLSearchParams();
-  usp.set('api_key', TMDB_API_KEY);
+  usp.set('api_key', activeKey());
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') usp.set(k, String(v));
   const url = `${TMDB_API_BASE}${path}?${usp.toString()}`;
   const now = Date.now();
