@@ -45,6 +45,7 @@ export default function Profile() {
   const [importState, setImportState] = useState<{ plan: ImportPlan; matches: MatchResult[] } | null>(null);
   const [importing, setImporting] = useState(false);
   const [usage, setUsage] = useState<string>('');
+  const [usageDetail, setUsageDetail] = useState<{ personal: string; personalRows: number; meta: string; metaRows: number; images: string; total: string } | null>(null);
 
   useEffect(() => {
     if (providersOpen && providers.length === 0) listWatchProviders('US').then((p) => setProviders(p.slice(0, 60))).catch(() => {});
@@ -52,9 +53,19 @@ export default function Profile() {
 
   const estimate = async () => {
     try {
-      const est = await navigator.storage.estimate();
-      const mb = ((est.usage ?? 0) / 1048576).toFixed(1);
-      setUsage(`${mb} MB`);
+      const [lib, diary, prog, lists, pairwise, feedback, settingsRow, titlesCount, metaCacheCount] = await Promise.all([
+        db.library.toArray(), db.diary.toArray(), db.progress.toArray(), db.lists.toArray(),
+        db.pairwise.toArray(), db.recFeedback.toArray(), getSettings(), db.titles.count(), db.metaCache.count()
+      ]);
+      const personalBytes = new Blob([JSON.stringify({ lib, diary, prog, lists, pairwise, feedback, settings: settingsRow })]).size;
+      const personalRows = lib.length + diary.length + prog.length + lists.length + pairwise.length + feedback.length;
+      const est = await navigator.storage.estimate() as StorageEstimate & { usageDetails?: { cacheStorage?: number } };
+      const totalBytes = est.usage ?? 0;
+      const cacheBytes = est.usageDetails?.cacheStorage ?? 0;
+      const metaBytes = Math.max(0, totalBytes - personalBytes - cacheBytes);
+      const fmt = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+      setUsage(fmt(totalBytes));
+      setUsageDetail({ personal: fmt(personalBytes), personalRows, meta: fmt(metaBytes), metaRows: titlesCount + metaCacheCount, images: cacheBytes ? fmt(cacheBytes) : 'Included in total', total: fmt(totalBytes) });
     } catch { setUsage('Unavailable'); }
   };
 
@@ -138,6 +149,7 @@ export default function Profile() {
         <div className="card mt16">
           <Row label="Streaming services" sub={`${settings?.watchProviders.length ?? 0} selected`} onClick={() => setProvidersOpen(true)} />
           <Row label="Taste sliders" onClick={() => setSlidersOpen(true)} />
+          <Row label="Taste calibration" sub="Sharpen recommendations with quick either/or picks" to="/calibrate" />
           <Row label="Stats & Taste DNA" to="/stats" />
         </div>
         <div className="card mt16">
@@ -233,11 +245,19 @@ export default function Profile() {
 
       {/* storage sheet */}
       <Sheet open={storageOpen} onClose={() => setStorageOpen(false)} title="Storage">
-        <div className="spread"><span className="body">Local usage</span><span className="footnote num">{usage}</span></div>
+        {usageDetail ? (
+          <>
+            <div className="spread" style={{ padding: '7px 0' }}><span className="body">Personal data</span><span className="footnote num">{usageDetail.personal} · {usageDetail.personalRows} items</span></div>
+            <div className="spread" style={{ padding: '7px 0' }}><span className="body">Cached metadata</span><span className="footnote num">{usageDetail.meta} · {usageDetail.metaRows} entries</span></div>
+            <div className="spread" style={{ padding: '7px 0' }}><span className="body">Cached images & app</span><span className="footnote num">{usageDetail.images}</span></div>
+            <div className="spread" style={{ padding: '7px 0' }}><span className="headline">Total local usage</span><span className="footnote num">{usageDetail.total}</span></div>
+          </>
+        ) : <div className="spread"><span className="body">Local usage</span><span className="footnote num">{usage}</span></div>}
         <div className="divider" />
-        <button className="btn btn-secondary btn-block" onClick={async () => { await db.metaCache.clear(); if ('caches' in window) { const keys = await caches.keys(); for (const k of keys.filter((x) => x.includes('tmdb-images'))) await caches.delete(k); } toast('Image and metadata cache cleared'); }}>Clear image & metadata cache</button>
-        <button className="btn btn-secondary btn-block mt8" onClick={async () => { await saveSettings({ searchHistory: [] }); toast('Search history cleared'); }}>Clear search history</button>
-        <p className="caption mt16">Clearing caches never touches your library, ratings, reviews or diary.</p>
+        <button className="btn btn-secondary btn-block" onClick={async () => { if ('caches' in window) { const keys = await caches.keys(); for (const k of keys.filter((x) => x.includes('tmdb-images') || x.includes('image'))) await caches.delete(k); } toast('Image cache cleared'); void estimate(); }}>Clear image cache</button>
+        <button className="btn btn-secondary btn-block mt8" onClick={async () => { await db.metaCache.clear(); toast('Metadata cache cleared'); void estimate(); }}>Clear metadata cache</button>
+        <button className="btn btn-secondary btn-block mt8" onClick={async () => { await saveSettings({ searchHistory: [] }); toast('Search history cleared'); void estimate(); }}>Clear search history</button>
+        <p className="caption mt16">Clearing caches never touches your library, ratings, reviews or diary. Personal-data deletion lives under Reset, separately.</p>
       </Sheet>
 
       {/* metadata key sheet */}

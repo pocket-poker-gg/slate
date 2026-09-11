@@ -19,6 +19,7 @@ const Triage = lazy(() => import('./ui/screens/Triage'));
 const Stats = lazy(() => import('./ui/screens/Stats'));
 const YearInReview = lazy(() => import('./ui/screens/YearInReview'));
 const Profile = lazy(() => import('./ui/screens/Profile'));
+const Calibrate = lazy(() => import('./ui/screens/Calibrate'));
 
 // Warm the route chunks after first paint so taps never wait on the network.
 const warmRoutes = () => {
@@ -41,7 +42,7 @@ import { loadGenreMaps } from './providers/tmdb';
 function BottomNav() {
   const loc = useLocation();
   if (loc.pathname.startsWith('/onboarding')) return null;
-  if (loc.pathname.startsWith('/title/') || loc.pathname === '/triage') return null;
+  if (loc.pathname.startsWith('/title/') || loc.pathname === '/triage' || loc.pathname === '/calibrate') return null;
   const item = (to: string, label: string, icon: React.ReactNode) => (
     <NavLink to={to} className={({ isActive }) => (isActive ? 'active' : '')} end={to === '/'} aria-label={label}>{icon}{label}</NavLink>
   );
@@ -127,6 +128,7 @@ export default function App() {
             <Route path="/stats" element={<Stats />} />
             <Route path="/year/:year" element={<YearInReview />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/calibrate" element={<Calibrate />} />
           </Routes>
           </Suspense>
           <BottomNav />

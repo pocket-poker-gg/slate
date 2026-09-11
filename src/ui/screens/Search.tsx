@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { searchMulti, trending, type SearchResults } from '../../providers/tmdb';
+import { searchMulti, trending, getTitle, type SearchResults, type SearchResultItem } from '../../providers/tmdb';
 import { pushSearchHistory, getSettings } from '../../storage/repo';
 import { db } from '../../storage/db';
 import { posterUrl } from '../../data/config';
@@ -19,13 +19,16 @@ const MOOD_WORDS: Record<string, string[]> = {
   animated: ['Animation']
 };
 
-interface ParsedQuery { text: string; genres: string[]; maxSeasons?: number; maxMinutes?: number; likeKey?: string }
+export interface ParsedQuery { text: string; genres: string[]; maxSeasons?: number; maxMinutes?: number; likeText?: string }
 
 export function parseNaturalQuery(q: string): ParsedQuery {
   let text = q.toLowerCase();
   const genres: string[] = [];
   let maxSeasons: number | undefined;
   let maxMinutes: number | undefined;
+  let likeText: string | undefined;
+  const likeMatch = text.match(/\b(?:(?:some|any)thing\s+|more\s+)?like\s+(.+)$/);
+  if (likeMatch) { likeText = likeMatch[1].trim(); text = text.replace(likeMatch[0], ' '); }
   const seasonMatch = text.match(/(\d+)\s*seasons?/);
   if (seasonMatch) { maxSeasons = Number(seasonMatch[1]); text = text.replace(seasonMatch[0], ' '); }
   const minMatch = text.match(/(\d+)\s*m(in(ute)?s?)?\b/);
@@ -33,7 +36,7 @@ export function parseNaturalQuery(q: string): ParsedQuery {
   for (const [word, gs] of Object.entries(MOOD_WORDS)) {
     if (new RegExp(`\\b${word}\\b`).test(text)) { genres.push(...gs); text = text.replace(new RegExp(`\\b${word}\\b`, 'g'), ' '); }
   }
-  return { text: text.replace(/\s+/g, ' ').trim(), genres, maxSeasons, maxMinutes };
+  return { text: text.replace(/\s+/g, ' ').trim(), genres, maxSeasons, maxMinutes, likeText };
 }
 
 export default function Search() {
@@ -42,6 +45,7 @@ export default function Search() {
   const [searching, setSearching] = useState(false);
   const [trendingItems, setTrendingItems] = useState<SearchResults['items']>([]);
   const [tab, setTab] = useState<'all' | 'movie' | 'tv'>('all');
+  const [likeTitle, setLikeTitle] = useState<string | null>(null);
   const online = useOnline();
   const settings = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,11 +58,37 @@ export default function Search() {
 
   useEffect(() => {
     clearTimeout(timer.current);
-    if (!q.trim()) { setResults(null); setSearching(false); return; }
+    if (!q.trim()) { setResults(null); setSearching(false); setLikeTitle(null); return; }
     setSearching(true);
     timer.current = setTimeout(async () => {
       try {
         const parsed = parseNaturalQuery(q);
+        if (parsed.likeText) {
+          // "something like severance": resolve the seed, then serve its
+          // recommendations/similar from TMDB, filtered by any extra words.
+          const seedRes = await searchMulti(parsed.likeText);
+          const seed = seedRes.items[0];
+          if (!seed) { setResults({ items: [], people: [], totalResults: 0 }); setLikeTitle(null); }
+          else {
+            const meta = await getTitle(seed.mediaType, seed.tmdbId);
+            const keys = [...meta.recommendations, ...meta.similar].slice(0, 40);
+            const metas = (await db.titles.bulkGet(keys)).filter((m): m is NonNullable<typeof m> => !!m);
+            let items: SearchResultItem[] = metas.map((m) => ({
+              key: m.key, tmdbId: m.tmdbId, mediaType: m.mediaType, title: m.title, year: m.year,
+              posterPath: m.posterPath, overview: m.overview, genreIds: m.genres,
+              voteAverage: m.voteAverage, voteCount: m.voteCount, popularity: m.popularity
+            }));
+            if (parsed.genres.length) {
+              items = items.filter((it) => (metas.find((m) => m.key === it.key)?.genreNames ?? []).some((g) => parsed.genres.includes(g)));
+            }
+            setLikeTitle(seed.title);
+            setResults({ items, people: [], totalResults: items.length });
+          }
+          void pushSearchHistory(q.trim());
+          setSearching(false);
+          return;
+        }
+        setLikeTitle(null);
         const r = await searchMulti(parsed.text || q);
         let items = r.items;
         if (parsed.genres.length) {
@@ -85,8 +115,11 @@ export default function Search() {
     <div>
       <div className="searchbar">
         <span className="search-icon"><IconSearch /></span>
-        <input ref={inputRef} className="input" placeholder="Shows, movies, people - or try &quot;dark 1 season mystery&quot;" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
+        <input ref={inputRef} className="input" placeholder="Try &quot;dark 1 season mystery&quot; or &quot;something like severance&quot;" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
       </div>
+      {likeTitle && q.trim() && (
+        <div className="chip-row"><span className="chip on">More like {likeTitle}</span></div>
+      )}
       <div className="chip-row">
         {(['all', 'movie', 'tv'] as const).map((t) => (
           <button key={t} className={`chip ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>

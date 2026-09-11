@@ -28,6 +28,8 @@ export default function Discover() {
   const [maxRuntime, setMaxRuntime] = useState<number | undefined>(undefined);
   const [decade, setDecade] = useState<number | undefined>(undefined);
   const [status, setStatus] = useState<string | undefined>(undefined);
+  const [language, setLanguage] = useState<string | undefined>(undefined);
+  const [miniseries, setMiniseries] = useState(false);
   const [onlyMyProviders, setOnlyMyProviders] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('match');
   const [results, setResults] = useState<SearchResultItem[] | null>(null);
@@ -44,6 +46,8 @@ export default function Discover() {
       yearGte: decade, yearLte: decade ? decade + 9 : undefined,
       providers: onlyMyProviders && settings?.watchProviders.length ? settings.watchProviders : undefined,
       status: mediaType === 'tv' ? status : undefined,
+      language,
+      tvType: mediaType === 'tv' && miniseries ? 2 : undefined,
       sort: sortMode === 'quality' ? 'vote_average.desc' : 'popularity.desc'
     }).then(async (items) => {
       if (!alive) return;
@@ -63,7 +67,7 @@ export default function Discover() {
       setLoading(false);
     }).catch(() => { if (alive) { setResults([]); setLoading(false); } });
     return () => { alive = false; };
-  }, [mediaType, JSON.stringify(genres), minRating, maxRuntime, decade, status, onlyMyProviders, sortMode, settings?.watchProviders?.length]);
+  }, [mediaType, JSON.stringify(genres), minRating, maxRuntime, decade, status, language, miniseries, onlyMyProviders, sortMode, settings?.watchProviders?.length]);
 
   const shown = useMemo(() => {
     if (!results) return null;
@@ -103,7 +107,13 @@ export default function Discover() {
         {[2020, 2010, 2000, 1990].map((d) => <Chip key={d} label={`${d}s`} on={decade === d} onClick={() => setDecade((x) => (x === d ? undefined : d))} />)}
         {mediaType === 'tv' && <Chip label="Ended" on={status === '3'} onClick={() => setStatus((s) => (s === '3' ? undefined : '3'))} />}
         {mediaType === 'tv' && <Chip label="Returning" on={status === '0'} onClick={() => setStatus((s) => (s === '0' ? undefined : '0'))} />}
+        {mediaType === 'tv' && <Chip label="Miniseries" on={miniseries} onClick={() => setMiniseries((v) => !v)} />}
         {(settings?.watchProviders.length ?? 0) > 0 && <Chip label="On my services" on={onlyMyProviders} onClick={() => setOnlyMyProviders((v) => !v)} />}
+      </div>
+      <div className="chip-row">
+        {([['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['ko', 'Korean'], ['ja', 'Japanese'], ['hi', 'Hindi'], ['zh', 'Chinese']] as const).map(([code, name]) => (
+          <Chip key={code} label={name} on={language === code} onClick={() => setLanguage((l) => (l === code ? undefined : code))} />
+        ))}
       </div>
       <div className="chip-row">
         {([['match', 'Best Match'], ['quality', 'Highest Quality'], ['gems', 'Hidden Gems'], ['short', 'Short Commitment'], ['adventurous', 'Most Adventurous']] as [SortMode, string][]).map(([v, l]) => (

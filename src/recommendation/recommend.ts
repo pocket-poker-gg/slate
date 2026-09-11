@@ -183,6 +183,10 @@ export async function tonightRecommendations(f: TonightFilters): Promise<Recomme
   const limit = f.limit ?? 7;
   const recs = await generateRecommendations({ limit: 40, mediaType: f.format === 'either' ? undefined : f.format });
   let filtered = recs.filter((r) => tonightPass(r.scored.meta, f));
+  if (f.providersOnly) {
+    const mine = new Set((await getSettings()).watchProviders);
+    if (mine.size) filtered = filtered.filter((r) => r.scored.meta.providers?.flatrate?.some((pv) => mine.has(pv.id)));
+  }
   // energy adjustment: tired favors high commitmentFit (short) + comfort
   if (f.energy === 'tired') {
     filtered = filtered.map((r) => ({ ...r, scored: { ...r.scored, score: r.scored.score * 0.85 + r.scored.components.commitmentFit * 0.15 } }));

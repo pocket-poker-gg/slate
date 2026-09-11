@@ -5,7 +5,7 @@ import { recordFeedback } from '../../storage/repo';
 import { backdropUrl, posterUrl } from '../../data/config';
 import { formatCommitment, predictRating } from '../../recommendation/predict';
 import { Chip, Segmented, useToast } from '../components';
-import { useOnline } from '../hooks';
+import { useOnline, useSettings } from '../hooks';
 import { IconBolt, IconChevronL } from '../icons';
 
 const MOODS = ['cerebral', 'intense', 'comforting', 'funny', 'dark', 'weird', 'emotional', 'thrilling', 'background', 'immersive'] as const;
@@ -19,6 +19,7 @@ export default function Tonight() {
   const [loading, setLoading] = useState(false);
   const online = useOnline();
   const toast = useToast();
+  const settings = useSettings();
 
   const run = async () => {
     setLoading(true);
@@ -77,6 +78,14 @@ export default function Tonight() {
             {([['one_sitting', 'One sitting'], ['miniseries', 'Miniseries'], ['short_series', 'Short series'], ['any', "Don't care"]] as const).map(([v, l]) => <Chip key={v} label={l} on={filters.commitment === v} onClick={() => set('commitment', v)} />)}
           </div>
         </div>
+        {(settings?.watchProviders.length ?? 0) > 0 && (
+          <div className="section" style={{ marginTop: 14 }}>
+            <div className="footnote" style={{ marginBottom: 8, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Availability</div>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <Chip label="On my services" on={!!filters.providersOnly} onClick={() => set('providersOnly', filters.providersOnly ? undefined : true)} />
+            </div>
+          </div>
+        )}
         <div className="section" style={{ marginTop: 14 }}>
           <div className="footnote" style={{ marginBottom: 8, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Energy</div>
           <Segmented value={filters.energy ?? 'normal'} onChange={(v) => set('energy', v)} options={[{ value: 'tired', label: 'Tired' }, { value: 'normal', label: 'Normal' }, { value: 'focused', label: 'Focused' }]} />

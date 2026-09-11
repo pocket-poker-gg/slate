@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { computeYearStats, computeTasteDNA, computeSourceAlignment, computeTasteEvolution, type YearStats, type TasteDNA, type SourceAlignment } from '../../analytics/stats';
 import { buildContext } from '../../recommendation/recommend';
 import { predictRating, commitmentValue } from '../../recommendation/predict';
-import { Empty } from '../components';
+import { Empty, Segmented } from '../components';
 import type { TitleMeta } from '../../data/types';
 
 export default function Stats() {
@@ -18,7 +18,8 @@ export default function Stats() {
   const [dna, setDna] = useState<TasteDNA | null>(null);
   const [align, setAlign] = useState<SourceAlignment[]>([]);
   const [evolution, setEvolution] = useState<{ description: string } | null>(null);
-  const [frontier, setFrontier] = useState<{ meta: TitleMeta; minutes: number; predicted: number; front: boolean }[]>([]);
+  const [frontier, setFrontier] = useState<{ meta: TitleMeta; minutes: number; predicted: number }[]>([]);
+  const [frontierType, setFrontierType] = useState<'both' | 'movie' | 'tv'>('both');
 
   useEffect(() => {
     if (!diary || !titles) return;
@@ -32,18 +33,14 @@ export default function Stats() {
       try {
         const ctx = await buildContext();
         const wl = (library ?? []).filter((e) => e.status === 'watchlist');
-        const pts: { meta: TitleMeta; minutes: number; predicted: number; front: boolean }[] = [];
+        const pts: { meta: TitleMeta; minutes: number; predicted: number }[] = [];
         for (const e of wl) {
           const meta = titlesMap.get(e.key);
           if (!meta || meta.detailLevel !== 'full') continue;
           const cv = commitmentValue(meta, ctx.model);
           if (!cv.totalMinutes) continue;
-          pts.push({ meta, minutes: cv.totalMinutes, predicted: predictRating(meta, ctx.model).rating, front: false });
+          pts.push({ meta, minutes: cv.totalMinutes, predicted: predictRating(meta, ctx.model).rating });
         }
-        // Pareto frontier: max predicted for any minutes <= x
-        const sorted = [...pts].sort((a, b) => a.minutes - b.minutes);
-        let best = -1;
-        for (const p of sorted) { if (p.predicted > best + 0.05) { p.front = true; best = p.predicted; } }
         setFrontier(pts);
       } catch { /* fine */ }
     })();
@@ -52,6 +49,19 @@ export default function Stats() {
   if (!library || library.length === 0) return <div className="page"><Empty title="No stats yet" body="Watch and rate some titles first." /></div>;
 
   const ratedCount = (library ?? []).filter((e) => e.rating !== undefined).length;
+
+  // Pareto frontier over the currently selected format: max predicted enjoyment
+  // for any time investment <= x.
+  const frontView = useMemo(() => {
+    const pts = frontier.filter((p) => frontierType === 'both' || p.meta.mediaType === frontierType);
+    const sorted = [...pts].sort((a, b) => a.minutes - b.minutes);
+    let best = -1;
+    return sorted.map((p) => {
+      let front = false;
+      if (p.predicted > best + 0.05) { front = true; best = p.predicted; }
+      return { ...p, front };
+    });
+  }, [frontier, frontierType]);
   const completedSeries = (library ?? []).filter((e) => e.status === 'watched' && e.key.startsWith('tv:')).length;
   const dropped = (library ?? []).filter((e) => e.status === 'dropped').length;
 
@@ -102,11 +112,12 @@ export default function Stats() {
       {frontier.length >= 4 && (
         <section className="section">
           <div className="section-head" style={{ padding: 0 }}><span className="title-2">Commitment Frontier</span><span className="caption">Watchlist value per hour</span></div>
-          <div className="frontier">
+          <Segmented value={frontierType} onChange={(v) => setFrontierType(v as 'both' | 'movie' | 'tv')} options={[{ value: 'both', label: 'Both' }, { value: 'movie', label: 'Movies' }, { value: 'tv', label: 'TV' }]} />
+          <div className="frontier" style={{ marginTop: 12 }}>
             <span className="axis-label" style={{ left: 10, bottom: 6 }}>Time investment</span>
             <span className="axis-label" style={{ left: 10, top: 6 }}>Predicted enjoyment</span>
-            {frontier.map((p) => {
-              const maxMin = Math.max(...frontier.map((x) => x.minutes));
+            {frontView.map((p) => {
+              const maxMin = Math.max(...frontView.map((x) => x.minutes));
               const x = 8 + (p.minutes / maxMin) * 84;
               const y = 92 - ((p.predicted - 1) / 4) * 76;
               return (
@@ -116,7 +127,8 @@ export default function Stats() {
               );
             })}
           </div>
-          <p className="caption mt8">White dots sit on the frontier - the most enjoyment per hour in your watchlist.</p>
+          {frontView.length < 4 && <p className="caption mt8">Not enough {frontierType === 'both' ? '' : frontierType === 'movie' ? 'movie ' : 'series '}titles on your watchlist for this view yet.</p>}
+          {frontView.length >= 4 && <p className="caption mt8">White dots sit on the frontier - the most enjoyment per hour in your watchlist.</p>}
         </section>
       )}
 

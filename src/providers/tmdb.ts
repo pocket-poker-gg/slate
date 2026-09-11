@@ -133,7 +133,7 @@ export async function topRated(mediaType: MediaType, page = 1): Promise<SearchRe
 
 export interface DiscoverParams {
   mediaType: MediaType; page?: number; genres?: number[]; yearGte?: number; yearLte?: number;
-  voteGte?: number; runtimeLte?: number; runtimeGte?: number; language?: string;
+  voteGte?: number; runtimeLte?: number; runtimeGte?: number; language?: string; tvType?: number;
   providers?: number[]; status?: string; sort?: string; keywords?: number[];
 }
 export async function discover(p: DiscoverParams): Promise<SearchResultItem[]> {
@@ -153,6 +153,7 @@ export async function discover(p: DiscoverParams): Promise<SearchResultItem[]> {
     'with_watch_providers': p.providers?.length ? p.providers.join('|') : undefined,
     watch_region: p.providers?.length ? 'US' : undefined,
     'with_status': p.mediaType === 'tv' ? p.status : undefined,
+    'with_type': p.mediaType === 'tv' ? p.tvType : undefined,
     'with_keywords': p.keywords?.join('|'),
     include_adult: 'false'
   };

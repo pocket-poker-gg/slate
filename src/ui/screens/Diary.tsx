@@ -9,7 +9,7 @@ import { deleteDiary } from '../../storage/repo';
 import { IconTrash } from '../icons';
 import { useToast } from '../components';
 
-type View = 'chronological' | 'calendar' | 'monthly';
+type View = 'chronological' | 'calendar' | 'monthly' | 'yearly';
 
 export default function Diary() {
   const [view, setView] = useState<View>('chronological');
@@ -27,6 +27,12 @@ export default function Diary() {
   const byMonth = useMemo(() => {
     const m = new Map<string, typeof diary>();
     for (const d of diary ?? []) { const k = d.date.slice(0, 7); m.set(k, [...(m.get(k) ?? []), d]); }
+    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [diary]);
+
+  const byYear = useMemo(() => {
+    const m = new Map<string, typeof diary>();
+    for (const d of diary ?? []) { const k = d.date.slice(0, 4); m.set(k, [...(m.get(k) ?? []), d]); }
     return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [diary]);
 
@@ -49,7 +55,7 @@ export default function Diary() {
     <div>
       <div className="topbar"><div className="topbar-row"><div className="large-title">Diary</div></div></div>
       <div style={{ padding: '0 16px' }}>
-        <Segmented value={view} onChange={(v) => setView(v as View)} options={[{ value: 'chronological', label: 'Timeline' }, { value: 'calendar', label: 'Calendar' }, { value: 'monthly', label: 'Monthly' }]} />
+        <Segmented value={view} onChange={(v) => setView(v as View)} options={[{ value: 'chronological', label: 'Timeline' }, { value: 'calendar', label: 'Calendar' }, { value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly' }]} />
       </div>
 
       {view === 'chronological' && (
@@ -86,6 +92,27 @@ export default function Diary() {
               <div key={i} className={`cal-day ${c?.count ? 'has' : ''}`}>{c?.day ?? ''}{c && c.count > 0 && <span className="cal-n num">{c.count}</span>}</div>
             ))}
           </div>
+        </div>
+      )}
+
+      {view === 'yearly' && (
+        <div className="section" style={{ padding: '0 16px' }}>
+          {byYear.map(([year, arr]) => {
+            const rated = arr!.filter((d) => d.rating);
+            return (
+              <div key={year} className="card card-pad mt8">
+                <div className="spread">
+                  <div className="headline">{year}</div>
+                  <Link to={`/year/${year}`} className="btn btn-ghost btn-sm">Year in Review</Link>
+                </div>
+                <div className="footnote mt8 num">
+                  {arr!.length} entr{arr!.length === 1 ? 'y' : 'ies'} · {arr!.filter((d) => d.mediaType === 'movie').length} movies · {arr!.filter((d) => d.mediaType === 'tv').length} episodes
+                  {rated.length ? ` · avg ${(rated.reduce((a, d) => a + (d.rating ?? 0), 0) / rated.length).toFixed(1)}` : ''}
+                </div>
+              </div>
+            );
+          })}
+          {diary && diary.length === 0 && <Empty title="Nothing logged yet" />}
         </div>
       )}
 
