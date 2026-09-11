@@ -65,19 +65,25 @@ function BottomNav() {
 const scrollMemory = new Map<string, number>();
 function ScrollRestore() {
   const loc = useLocation();
-  const prevPath = useRef<string | null>(null);
+  const pathRef = useRef(loc.pathname);
+  pathRef.current = loc.pathname;
+  // Track scroll continuously: by the time a route-change effect runs, the
+  // shorter incoming page has already clamped window.scrollY, so a
+  // save-on-leave would record the wrong position.
   useEffect(() => {
-    if (prevPath.current === null) { prevPath.current = loc.pathname; return; }
-    if (prevPath.current === loc.pathname) return;
-    scrollMemory.set(prevPath.current, window.scrollY);
-    prevPath.current = loc.pathname;
-    const y = scrollMemory.get(loc.pathname);
-    // Two frames: let restored content lay out before jumping back.
-    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y ?? 0)));
-  }, [loc.pathname]);
-  useEffect(() => () => {
-    if (prevPath.current) scrollMemory.set(prevPath.current, window.scrollY);
+    const onScroll = () => scrollMemory.set(pathRef.current, window.scrollY);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { onScroll(); window.removeEventListener('scroll', onScroll); };
   }, []);
+  useEffect(() => {
+    const y = scrollMemory.get(loc.pathname);
+    if (y === undefined) return;
+    // Content renders from session caches with fixed-geometry cards, so two
+    // frames is normally enough; the delayed retry covers late growth.
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+    const t = window.setTimeout(() => { if (Math.abs(window.scrollY - y) > 4) window.scrollTo(0, y); }, 300);
+    return () => window.clearTimeout(t);
+  }, [loc.pathname]);
   return null;
 }
 
