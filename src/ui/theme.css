@@ -88,7 +88,7 @@ input, textarea, select { font-family: inherit; color: var(--text); }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
   display: flex; justify-content: space-around; align-items: stretch;
   height: calc(var(--nav-h) + var(--sab)); padding-bottom: var(--sab);
-  background: color-mix(in srgb, var(--bg-elev) 86%, transparent);
+  background: color-mix(in srgb, var(--bg-elev) 94%, transparent);
   backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
   border-top: 0.5px solid var(--hairline);
 }
@@ -158,9 +158,9 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 .card-pad { padding: 16px; }
 
 /* sheet */
-.sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 80; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+.sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 190; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
 .sheet-overlay.open { opacity: 1; pointer-events: auto; }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; background: var(--surface); border-radius: 18px 18px 0 0; max-height: 86vh; display: flex; flex-direction: column; transform: translateY(105%); transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.24, 1); padding-bottom: var(--sab); max-width: 720px; margin: 0 auto; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 200; background: var(--surface); border-radius: 18px 18px 0 0; max-height: 86vh; display: flex; flex-direction: column; transform: translateY(105%); transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.24, 1); padding-bottom: var(--sab); max-width: 720px; margin: 0 auto; }
 .sheet.open { transform: none; }
 .sheet .grabber { width: 36px; height: 4.5px; border-radius: 3px; background: var(--hairline-strong); margin: 8px auto 4px; flex: none; }
 .sheet .sheet-body { overflow-y: auto; padding: 8px 20px 20px; }
@@ -305,6 +305,7 @@ input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; wid
 .tonight-card .tonight-backdrop { width: 100%; aspect-ratio: 16/10; object-fit: cover; }
 .tonight-card .tonight-body { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 18px; background: linear-gradient(to bottom, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.82)); color: #fff; }
 .match-pct { font-size: 13px; font-weight: 700; color: var(--good); }
+.tonight-card .match-pct { display: inline-flex; align-self: flex-start; background: rgba(0,0,0,0.55); padding: 4px 9px; border-radius: 8px; margin-bottom: 7px; }
 
-.text-input { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2); color: var(--ink); font-size: 15px; font-family: inherit; outline: none; }
-.text-input:focus { border-color: var(--ink); }
+.text-input { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--hairline-strong); background: var(--surface-2); color: var(--text); font-size: 15px; font-family: inherit; outline: none; box-sizing: border-box; }
+.text-input:focus { border-color: var(--text-2); }

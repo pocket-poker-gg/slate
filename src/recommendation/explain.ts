@@ -30,7 +30,7 @@ export function explain(scored: ScoredCandidate, model: TasteModel): Explanation
   const loved = model.positives.slice(0, 2);
   let headline: string;
   if (loved.length && c.tasteSimilarity > 0.6) {
-    const phrased = loved.map((l) => (l.rating ? `${l.title} ${formatRating(l.rating)}` : l.title)).join(' and ');
+    const phrased = loved.map((l) => (l.rating ? `${l.title} (${formatRating(l.rating)})` : l.title)).join(' and ');
     headline = `Because you loved ${phrased}`;
   } else if (genreHits.length) {
     headline = `Strong ${genreHits.slice(0, 2).join(' & ').toLowerCase()} match for your taste`;
