@@ -5,13 +5,13 @@ import type { WatchProviderInfo } from '../data/types';
 import { IconChevronL, IconStar, IconX } from './icons';
 
 // ---------- Poster ----------
-export function Poster({ path, title, className = '', size = 'w342' as const }: { path?: string | null; title: string; className?: string; size?: 'w92' | 'w154' | 'w185' | 'w342' | 'w500' }) {
+export function Poster({ path, title, className = '', size = 'w342' as const, eager = false }: { path?: string | null; title: string; className?: string; size?: 'w92' | 'w154' | 'w185' | 'w342' | 'w500'; eager?: boolean }) {
   const [failed, setFailed] = useState(false);
   const url = posterUrl(path, size);
   return (
     <div className={`poster ${className}`}>
       {url && !failed ? (
-        <img src={url} alt={title} loading="lazy" onError={() => setFailed(true)} />
+        <img src={url} alt={title} loading={eager ? 'eager' : 'lazy'} decoding="async" onError={() => setFailed(true)} />
       ) : (
         <div className="poster-fallback">{title}</div>
       )}
@@ -116,13 +116,15 @@ export const useToast = () => useContext(ToastCtx);
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const idRef = useRef(0);
+  const lastRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
   const push = useCallback((text: string) => {
+    const now = Date.now();
+    // collapse duplicate bursts of the same toast (e.g. double-tap)
+    if (lastRef.current.text === text && now - lastRef.current.at < 1200) return;
+    lastRef.current = { text, at: now };
     const id = ++idRef.current;
     setToasts((t) => [...t.slice(-1), { id, text }]); // keep at most 2, single-line feed
-    setTimeout(() => setToasts((t) => t.map((x) => (x.id === id ? { ...x } : x))), 0);
-    setTimeout(() => {
-      setToasts((t) => t.filter((x) => x.id !== id));
-    }, 2400);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2400);
   }, []);
   return (
     <ToastCtx.Provider value={push}>

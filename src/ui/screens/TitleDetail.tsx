@@ -87,7 +87,7 @@ export default function TitleDetail() {
         {meta.backdropPath
           ? <><img className="backdrop" src={backdropUrl(meta.backdropPath) ?? undefined} alt="" /><div className="backdrop-fade" /></>
           : <div style={{ height: 120 }} />}
-        <button className="iconbtn" onClick={() => history.back()} aria-label="Back" style={{ position: 'absolute', top: 'calc(var(--sat) + 12px)', left: 16, background: 'rgba(0,0,0,0.45)', color: '#fff', backdropFilter: 'blur(10px)' }}><IconChevronR /></button>
+        <button className="iconbtn" onClick={() => history.back()} aria-label="Back" style={{ position: 'absolute', top: 'calc(var(--sat) + 12px)', left: 16, background: 'rgba(0,0,0,0.45)', color: '#fff', backdropFilter: 'blur(10px)' }}><IconChevronL /></button>
         <button className="iconbtn" onClick={share} aria-label="Share" style={{ position: 'absolute', top: 'calc(var(--sat) + 12px)', right: 16, background: 'rgba(0,0,0,0.45)', color: '#fff', backdropFilter: 'blur(10px)' }}><IconShare /></button>
       </div>
       <div className="detail-head">
@@ -141,17 +141,21 @@ export default function TitleDetail() {
 
       {/* ratings */}
       <section className="section" style={{ padding: '0 16px' }}>
-        <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
-          {ratings.map((r) => (
-            <a key={r.source} className="rating-source" href={r.url ?? tmdbUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-              {r.available && r.value !== undefined ? (
-                <><span className="rs-value num">{r.value}</span><span className="rs-name">{r.label}</span><span className="rs-sub">{r.rawLabel}{r.voteCount ? ` · ${r.voteCount > 999 ? `${Math.round(r.voteCount / 1000)}k` : r.voteCount} votes` : ''}</span></>
-              ) : (
-                <><span className="rs-value num" style={{ color: 'var(--text-3)' }}>--</span><span className="rs-name">{r.label}</span><span className="rs-sub">{r.unavailableReason}</span></>
-              )}
-            </a>
-          ))}
-        </div>
+        {ratings.length > 0 && (
+          <div className="ratings-line">
+            {ratings.filter((r) => r.available && r.value !== undefined).map((r) => (
+              <a key={r.source} className="rl-main" href={r.url ?? tmdbUrl} target="_blank" rel="noopener noreferrer">
+                <span className="rl-value num">{r.value}</span>
+                <span className="footnote">{r.label}{r.voteCount ? ` · ${r.voteCount > 999 ? `${Math.round(r.voteCount / 1000)}k` : r.voteCount} votes` : ''}</span>
+              </a>
+            ))}
+            <span className="rl-links">
+              {ratings.filter((r) => !r.available && r.url).map((r) => (
+                <a key={r.source} href={r.url} target="_blank" rel="noopener noreferrer" title={`${r.label}: not available automatically - opens ${r.label}`}>{r.label}</a>
+              ))}
+            </span>
+          </div>
+        )}
         {!consensus.insufficient && consensus.consensus !== undefined && (
           <div className="footnote center mt8">Consensus {consensus.consensus} · Agreement {consensus.agreement} · Polarization {consensus.polarization}</div>
         )}

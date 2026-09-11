@@ -1,22 +1,40 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { HashRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useSettings } from './ui/hooks';
 import { ToastProvider } from './ui/components';
+import { Suspense, lazy } from 'react';
 import Home from './ui/screens/Home';
-import Tonight from './ui/screens/Tonight';
-import Discover from './ui/screens/Discover';
-import Search from './ui/screens/Search';
-import Library from './ui/screens/Library';
-import ListDetail from './ui/screens/ListDetail';
-import TitleDetail from './ui/screens/TitleDetail';
-import SeasonDetail from './ui/screens/SeasonDetail';
-import Diary from './ui/screens/Diary';
-import Triage from './ui/screens/Triage';
-import Stats from './ui/screens/Stats';
-import YearInReview from './ui/screens/YearInReview';
-import Profile from './ui/screens/Profile';
 import Onboarding from './ui/screens/Onboarding';
+// Route-level code splitting: only the shell + Home ship in the initial chunk.
+const Tonight = lazy(() => import('./ui/screens/Tonight'));
+const Discover = lazy(() => import('./ui/screens/Discover'));
+const Search = lazy(() => import('./ui/screens/Search'));
+const Library = lazy(() => import('./ui/screens/Library'));
+const ListDetail = lazy(() => import('./ui/screens/ListDetail'));
+const TitleDetail = lazy(() => import('./ui/screens/TitleDetail'));
+const SeasonDetail = lazy(() => import('./ui/screens/SeasonDetail'));
+const Diary = lazy(() => import('./ui/screens/Diary'));
+const Triage = lazy(() => import('./ui/screens/Triage'));
+const Stats = lazy(() => import('./ui/screens/Stats'));
+const YearInReview = lazy(() => import('./ui/screens/YearInReview'));
+const Profile = lazy(() => import('./ui/screens/Profile'));
+
+// Warm the route chunks after first paint so taps never wait on the network.
+const warmRoutes = () => {
+  void import('./ui/screens/Discover');
+  void import('./ui/screens/Search');
+  void import('./ui/screens/Library');
+  void import('./ui/screens/TitleDetail');
+  void import('./ui/screens/Tonight');
+  void import('./ui/screens/Diary');
+  void import('./ui/screens/Profile');
+  void import('./ui/screens/SeasonDetail');
+  void import('./ui/screens/Stats');
+  void import('./ui/screens/Triage');
+  void import('./ui/screens/ListDetail');
+  void import('./ui/screens/YearInReview');
+};
 import { IconHome, IconCompass, IconLibrary, IconDiary, IconProfile } from './ui/icons';
 import { loadGenreMaps } from './providers/tmdb';
 
@@ -47,7 +65,11 @@ function ScrollRestore() {
 function ThemeManager() {
   const settings = useSettings();
   useEffect(() => {
-    const theme = settings?.theme ?? 'system';
+    // localStorage mirror avoids a dark->light (or light->dark) first-frame flash
+    let stored = 'system';
+    try { stored = localStorage.getItem('slate.theme') ?? 'system'; } catch { /* ignore */ }
+    const theme = settings?.theme ?? stored;
+    if (settings?.theme) { try { localStorage.setItem('slate.theme', settings.theme); } catch { /* ignore */ } }
     const apply = () => {
       const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -76,13 +98,20 @@ function UpdatePrompt() {
 }
 
 export default function App() {
-  useEffect(() => { void loadGenreMaps(); }, []);
+  useEffect(() => {
+    void loadGenreMaps();
+    const idle = (window as any).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1200));
+    idle(warmRoutes);
+    // Ask the OS to never evict this origin's data (best-effort, silent).
+    void navigator.storage?.persist?.().catch(() => {});
+  }, []);
   return (
     <HashRouter>
       <ToastProvider>
         <ThemeManager />
         <ScrollRestore />
         <div className="app">
+          <Suspense fallback={null}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/onboarding" element={<Onboarding />} />
@@ -99,6 +128,7 @@ export default function App() {
             <Route path="/year/:year" element={<YearInReview />} />
             <Route path="/profile" element={<Profile />} />
           </Routes>
+          </Suspense>
           <BottomNav />
           <UpdatePrompt />
         </div>

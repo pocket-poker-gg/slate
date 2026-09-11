@@ -10,15 +10,20 @@ import { PosterLink, SkeletonShelf, Empty, useToast } from '../components';
 import { IconSearch, IconBolt } from '../icons';
 import type { TitleMeta } from '../../data/types';
 
+// Session caches: returning to Home must render instantly with the last
+// good content while fresh data recomputes silently in the background.
+let recsCache: Recommendation[] = [];
+let recsLoaded = false;
+
 export default function Home() {
   const settings = useSettings();
   const nav = useNavigate();
   const online = useOnline();
-  const watching = useLibrary('watching');
-  const watchlist = useLibrary('watchlist');
   const all = useLibrary();
-  const [tonight, setTonight] = useState<Recommendation | null>(null);
-  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const watching = all?.filter((e) => e.status === 'watching');
+  const watchlist = all?.filter((e) => e.status === 'watchlist');
+  const [tonight, setTonight] = useState<Recommendation | null>(recsCache[0] ?? null);
+  const [recs, setRecs] = useState<Recommendation[]>(recsCache);
   const [progressRows, setProgressRows] = useState<{ meta: TitleMeta; next: { season: number; episode: number }; pct: number }[]>([]);
   const toast = useToast();
 
@@ -35,9 +40,10 @@ export default function Home() {
       try {
         const list = await generateRecommendations({ limit: 8 });
         if (!alive) return;
+        recsCache = list; recsLoaded = true;
         setRecs(list);
         setTonight(list[0] ?? null);
-      } catch { if (alive) setRecs([]); }
+      } catch { if (alive) recsLoaded = true; }
     })();
     return () => { alive = false; };
   }, [online]);
@@ -87,8 +93,8 @@ export default function Home() {
           <div className="section-head"><span className="title-2">Continue Watching</span></div>
           <div className="shelf">
             {progressRows.map(({ meta, next, pct }) => (
-              <Link key={meta.key} to={linkOf(meta.key)} className="shelf-item">
-                <div className="poster" style={{ aspectRatio: '16/9', width: 200 }}>
+              <Link key={meta.key} to={linkOf(meta.key)} className="shelf-item cw">
+                <div className="poster" style={{ aspectRatio: '16/9' }}>
                   {meta.backdropPath ? <img src={backdropUrl(meta.backdropPath, 'w780') ?? ''} alt={meta.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="poster-fallback">{meta.title}</div>}
                   <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 10px 8px', background: 'linear-gradient(transparent, rgba(0,0,0,0.85))', color: '#fff', fontSize: 12, fontWeight: 600 }}>S{next.season} E{next.episode}</div>
                   <div className="progressbar" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, borderRadius: 0 }}><div style={{ width: `${Math.round(pct * 100)}%` }} /></div>
@@ -134,7 +140,7 @@ export default function Home() {
           </div>
         </section>
       )}
-      {!recs.length && <section className="section"><SkeletonShelf /></section>}
+      {!recs.length && !recsLoaded && <section className="section"><SkeletonShelf /></section>}
 
       {/* Shortlist */}
       {shortlist.length > 0 && (
