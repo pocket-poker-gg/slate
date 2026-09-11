@@ -27,3 +27,15 @@ There is no server-side code anywhere in the repository.
 ## Schema versioning
 
 IndexedDB schema is versioned through Dexie (`db.version(N)`). Backups carry their own `format`/`version` envelope and are validated before restore. See docs/LOCAL-STORAGE.md and docs/BACKUP-RESTORE.md.
+
+## Discovery (src/recommendation/discovery.ts)
+Discover runs on real TMDB discover feeds, never canned lists. Summary-level
+scoring gives every card a real match score without detail hydration (genre
+affinity from the on-device taste model, bayesian quality, novelty, daily
+exploration salt). Dials change the actual API request (sort, vote floor,
+runtime cap) and the ranking. Hidden gems = high rating + low votes. Infinite
+scroll paginates the catalog with dedupe; watched/dropped/not-interested/
+dismissed titles are excluded; a fresh profile degrades to an honest
+quality + novelty blend and says so. Home shelves are all data-earned:
+day-salted recommendations, live trending minus the library, next-episode air
+dates for caught-up shows.
